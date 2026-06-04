@@ -1,25 +1,13 @@
 # pvectl
 
-`pvectl` is a small Proxmox VE CLI focused on daily VM/QEMU and LXC
-operations. It wraps the Proxmox VE API through
-[`go-proxmox`](https://github.com/luthermonson/go-proxmox) and keeps user
-commands resource-oriented instead of exposing raw API paths.
+Personal HomeLab Proxmox VE CLI.
 
-## v0.1 scope
+`pvectl` wraps the Proxmox VE API through
+[`go-proxmox`](https://github.com/luthermonson/go-proxmox) and focuses on
+daily VM/QEMU and LXC operations. It is intentionally small: resource-oriented
+commands for a personal Proxmox cluster, not a full management platform.
 
-- Manage config contexts backed by YAML.
-- List PVE nodes.
-- List and inspect VM/QEMU guests.
-- List and inspect LXC containers.
-- Start, gracefully shut down, and stop VM/LXC guests.
-- Clone VM/QEMU and LXC guests from templates.
-- Mutate guest config with generic `--set key=value` options.
-- Delete, migrate, and resize VM/QEMU and LXC guests.
-- List, create, and rollback VM/QEMU and LXC snapshots.
-- Optionally wait for async PVE tasks.
-- Render `table`, `json`, or `yaml` output.
-
-## Install from source
+## Install
 
 ```bash
 make build
@@ -29,8 +17,8 @@ The binary is written to `bin/pvectl`.
 
 ## Configure
 
-Create an API token in Proxmox VE, export the token secret, then create a
-context:
+For a typical HomeLab setup, one default context is enough. Create an API token
+in Proxmox VE, export the token secret, then save a context:
 
 ```bash
 export PVECTL_HOME_TOKEN_SECRET="your-token-secret"
@@ -42,40 +30,49 @@ pvectl config set-context home \
   --insecure \
   --timeout 30s \
   --default-output table
+
+pvectl config use-context home
 ```
 
 `pvectl` stores only the environment variable name in
 `~/.config/pvectl/config.yaml`; it does not write token secrets to disk.
 
-## Examples
+## Daily Usage
 
 ```bash
 pvectl node ls
+
 pvectl vm ls
-pvectl vm get 100 -o json
+pvectl vm get 100
 pvectl vm start 100 --wait
 pvectl vm shutdown 100 --wait
+pvectl vm reboot 100 --wait
 pvectl vm stop 100
-pvectl vm clone 9000 --newid 101 --name app-vm --target pve1 --wait
-pvectl vm config 101 --set memory=4096 --set cores=4 --wait
-pvectl vm migrate 101 --target pve2 --online --wait
-pvectl vm resize 101 --disk scsi0 --size +20G --wait
-pvectl vm snapshot ls 101
-pvectl vm snapshot create 101 before-upgrade --wait
-pvectl vm snapshot rollback 101 before-upgrade --force --wait
-pvectl vm delete 101 --force
 
-pvectl lxc ls --node pve1
+pvectl lxc ls
 pvectl lxc get 200
 pvectl lxc start 200 --wait
-pvectl lxc clone 900 --newid 201 --hostname app-lxc --target pve1 --wait
-pvectl lxc config 201 --set memory=2048 --set cores=2 --wait
-pvectl lxc migrate 201 --target pve2 --online --wait
-pvectl lxc resize 201 --disk rootfs --size +10G --wait
-pvectl lxc snapshot ls 201
-pvectl lxc snapshot create 201 before-upgrade --wait
-pvectl lxc snapshot rollback 201 before-upgrade --force --wait
-pvectl lxc delete 201 --force
+pvectl lxc shutdown 200 --wait
+pvectl lxc reboot 200 --wait
+pvectl lxc stop 200
 ```
 
-See [docs/usage.md](docs/usage.md) for the complete v0.1 command list.
+Default output is `table` for humans. Use `-o json` for scripts:
+
+```bash
+pvectl vm get 100 -o json
+```
+
+See [docs/usage.md](docs/usage.md) for clone, config, resize, migrate,
+snapshot, delete, and scripting details.
+
+## Non-goals
+
+`pvectl` is not intended to be:
+
+- a Web UI
+- a server mode or HTTP API
+- a multi-user control plane
+- an RBAC, audit, billing, or policy platform
+- a replacement for the Proxmox VE Web UI
+- a full wrapper for every Proxmox REST API endpoint

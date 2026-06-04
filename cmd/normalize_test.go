@@ -14,6 +14,15 @@ func TestNormalizeArgsMovesLeafFlagsBeforePositionals(t *testing.T) {
 	}
 }
 
+func TestNormalizeArgsMovesRebootFlagsBeforePositionals(t *testing.T) {
+	args := []string{"pvectl", "vm", "reboot", "101", "--wait"}
+	want := []string{"pvectl", "vm", "reboot", "--wait", "101"}
+
+	if got := normalizeArgs(args); !reflect.DeepEqual(got, want) {
+		t.Fatalf("normalize = %#v, want %#v", got, want)
+	}
+}
+
 func TestNormalizeArgsMovesOutputFlag(t *testing.T) {
 	args := []string{"pvectl", "vm", "get", "100", "-o", "json"}
 	want := []string{"pvectl", "vm", "get", "-o", "json", "100"}

@@ -98,6 +98,12 @@ func (s *GuestService) Stop(ctx context.Context, vmid int, node string) error {
 	})
 }
 
+func (s *GuestService) Reboot(ctx context.Context, vmid int, node string) error {
+	return s.run(ctx, vmid, node, func(guest Guest) (Task, error) {
+		return guest.Reboot(ctx)
+	})
+}
+
 func (s *GuestService) Clone(ctx context.Context, vmid int, node string, options CloneOptions) (CloneResult, error) {
 	if options.Target == "" {
 		return CloneResult{}, fmt.Errorf("target node is required")

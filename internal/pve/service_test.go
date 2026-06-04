@@ -165,6 +165,54 @@ func TestGuestServiceDeleteWaits(t *testing.T) {
 	}
 }
 
+func TestGuestServiceVMRebootWaits(t *testing.T) {
+	task := &fakeTask{upid: "UPID:pve1:reboot"}
+	guest := &fakeGuest{
+		row:  output.GuestRow{Kind: "vm", VMID: 101, Node: "pve1"},
+		task: task,
+	}
+	backend := &fakeBackend{
+		nodes: []output.NodeRow{{Name: "pve1"}},
+		vms:   map[string]map[int]*fakeGuest{"pve1": {101: guest}},
+	}
+	svc := NewVMService(backend, TaskRunner{Wait: true}, nil, false)
+
+	err := svc.Reboot(context.Background(), 101, "")
+	if err != nil {
+		t.Fatalf("reboot: %v", err)
+	}
+	if !guest.rebooted {
+		t.Fatal("expected guest to be rebooted")
+	}
+	if !task.waited {
+		t.Fatal("expected reboot task to be waited")
+	}
+}
+
+func TestGuestServiceLXCRebootWaits(t *testing.T) {
+	task := &fakeTask{upid: "UPID:pve1:lxcreboot"}
+	guest := &fakeGuest{
+		row:  output.GuestRow{Kind: "lxc", VMID: 201, Node: "pve1"},
+		task: task,
+	}
+	backend := &fakeBackend{
+		nodes: []output.NodeRow{{Name: "pve1"}},
+		lxcs:  map[string]map[int]*fakeGuest{"pve1": {201: guest}},
+	}
+	svc := NewLXCService(backend, TaskRunner{Wait: true}, nil, false)
+
+	err := svc.Reboot(context.Background(), 201, "")
+	if err != nil {
+		t.Fatalf("reboot: %v", err)
+	}
+	if !guest.rebooted {
+		t.Fatal("expected guest to be rebooted")
+	}
+	if !task.waited {
+		t.Fatal("expected reboot task to be waited")
+	}
+}
+
 func TestGuestServiceMigratePassesOptions(t *testing.T) {
 	task := &fakeTask{upid: "UPID:pve1:migrate"}
 	guest := &fakeGuest{
@@ -208,7 +256,7 @@ func TestGuestServiceResizePassesDiskAndSize(t *testing.T) {
 }
 
 func TestGuestServiceOperationTaskFailure(t *testing.T) {
-	task := &fakeTask{upid: "UPID:pve1:delete", failed: true, exitStatus: "ERROR"}
+	task := &fakeTask{upid: "UPID:pve1:reboot", failed: true, exitStatus: "ERROR"}
 	guest := &fakeGuest{
 		row:  output.GuestRow{Kind: "vm", VMID: 101, Node: "pve1"},
 		task: task,
@@ -219,11 +267,11 @@ func TestGuestServiceOperationTaskFailure(t *testing.T) {
 	}
 	svc := NewVMService(backend, TaskRunner{Wait: true}, nil, false)
 
-	err := svc.Delete(context.Background(), 101, "")
+	err := svc.Reboot(context.Background(), 101, "")
 	if err == nil {
 		t.Fatal("expected task failure")
 	}
-	if got := err.Error(); got != "task UPID:pve1:delete failed: ERROR" {
+	if got := err.Error(); got != "task UPID:pve1:reboot failed: ERROR" {
 		t.Fatalf("error = %q", got)
 	}
 }
@@ -382,6 +430,7 @@ type fakeGuest struct {
 	cloneOptions     CloneOptions
 	configValues     map[string]string
 	deleted          bool
+	rebooted         bool
 	migrateOptions   MigrateOptions
 	resizeDisk       string
 	resizeSize       string
@@ -403,6 +452,11 @@ func (g *fakeGuest) Shutdown(context.Context) (Task, error) {
 }
 
 func (g *fakeGuest) Stop(context.Context) (Task, error) {
+	return g.task, nil
+}
+
+func (g *fakeGuest) Reboot(context.Context) (Task, error) {
+	g.rebooted = true
 	return g.task, nil
 }
 

@@ -1,32 +1,15 @@
 # pvectl Usage
 
-## Global Flags
+`pvectl` is a personal HomeLab Proxmox VE CLI for daily VM/QEMU and LXC
+operations.
+
+## Configuration
+
+For a typical HomeLab setup, create one context and make it current:
 
 ```bash
-pvectl \
-  --config ~/.config/pvectl/config.yaml \
-  --context home \
-  -o table \
-  --timeout 30s \
-  --insecure \
-  --verbose \
-  <resource> <action>
-```
+export PVECTL_HOME_TOKEN_SECRET="your-token-secret"
 
-Supported output formats are `table`, `json`, and `yaml`.
-
-For async guest control commands, use:
-
-```bash
-pvectl vm start 100 --wait --wait-timeout 5m
-```
-
-Task IDs and wait progress are written to stderr. Command results are written
-to stdout.
-
-## Config
-
-```bash
 pvectl config set-context home \
   --endpoint https://pve.lan:8006/api2/json \
   --token-id automation@pve!pvectl \
@@ -54,52 +37,34 @@ contexts:
     default_output: table
 ```
 
-The token secret must be supplied through the named environment variable:
+The token secret is read from the named environment variable at runtime.
+`pvectl` does not write token secrets to disk.
 
-```bash
-export PVECTL_HOME_TOKEN_SECRET="your-token-secret"
-```
+## Daily Commands
 
-## Nodes
+### Nodes
 
 ```bash
 pvectl node ls
-pvectl node ls -o json
 ```
 
-## VM/QEMU
+### VM/QEMU
 
 ```bash
 pvectl vm ls
 pvectl vm ls --node pve1
 pvectl vm get 100
-pvectl vm get 100 --node pve1 -o yaml
+pvectl vm get 100 --node pve1 -o json
 pvectl vm start 100 --wait
 pvectl vm shutdown 100 --wait
+pvectl vm reboot 100 --wait
 pvectl vm stop 100
-pvectl vm clone 9000 --newid 101 --name app-vm --target pve1 --wait
-pvectl vm clone 9000 --name app-vm --target pve1 --storage local-lvm --full --wait
-pvectl vm config 101 --set memory=4096 --set cores=4 --wait
-pvectl vm migrate 101 --target pve2 --online --wait
-pvectl vm resize 101 --disk scsi0 --size +20G --wait
-pvectl vm snapshot ls 101
-pvectl vm snapshot create 101 before-upgrade --wait
-pvectl vm snapshot rollback 101 before-upgrade --force --wait
-pvectl vm delete 101 --force
 ```
 
 When `--node` is omitted, `pvectl` traverses all nodes returned by the cluster
 and resolves the VMID automatically.
 
-For clone, omit `--newid` to let Proxmox allocate the next available VMID.
-Clone results are written to stdout and include `new_vmid`, so scripts can
-capture the actual allocated ID:
-
-```bash
-pvectl vm clone 9000 --name app-vm --target pve1 -o json
-```
-
-## LXC
+### LXC
 
 ```bash
 pvectl lxc ls
@@ -108,36 +73,90 @@ pvectl lxc get 200
 pvectl lxc get 200 --node pve1 -o json
 pvectl lxc start 200 --wait
 pvectl lxc shutdown 200 --wait
+pvectl lxc reboot 200 --wait
 pvectl lxc stop 200
-pvectl lxc clone 900 --newid 201 --hostname app-lxc --target pve1 --wait
-pvectl lxc clone 900 --hostname app-lxc --target pve1 --storage local-lvm --full --wait
-pvectl lxc config 201 --set memory=2048 --set cores=2 --wait
-pvectl lxc migrate 201 --target pve2 --online --wait
-pvectl lxc resize 201 --disk rootfs --size +10G --wait
-pvectl lxc snapshot ls 201
-pvectl lxc snapshot create 201 before-upgrade --wait
-pvectl lxc snapshot rollback 201 before-upgrade --force --wait
-pvectl lxc delete 201 --force
 ```
 
 When `--node` is omitted, `pvectl` traverses all nodes returned by the cluster
 and resolves the CTID automatically.
 
-For clone, omit `--newid` to let Proxmox allocate the next available CTID.
-The JSON/YAML field is still named `new_vmid` to match the existing guest DTOs.
+## Maintenance Commands
 
-## Delete Confirmation
+### Clone
+
+```bash
+pvectl vm clone 9000 --newid 101 --name app-vm --target pve1 --wait
+pvectl vm clone 9000 --name app-vm --target pve1 --storage local-lvm --full --wait
+
+pvectl lxc clone 900 --newid 201 --hostname app-lxc --target pve1 --wait
+pvectl lxc clone 900 --hostname app-lxc --target pve1 --storage local-lvm --full --wait
+```
+
+Omit `--newid` to let Proxmox allocate the next available VMID/CTID. Clone
+results are written to stdout and include `new_vmid`, so scripts can capture
+the allocated ID:
+
+```bash
+pvectl vm clone 9000 --name app-vm --target pve1 -o json
+```
+
+### Config
+
+```bash
+pvectl vm config 101 --set memory=4096 --set cores=4 --wait
+pvectl lxc config 201 --set memory=2048 --set cores=2 --wait
+```
+
+`config` passes generic `key=value` options to the Proxmox guest config API.
+
+### Resize
+
+```bash
+pvectl vm resize 101 --disk scsi0 --size +20G --wait
+pvectl lxc resize 201 --disk rootfs --size +10G --wait
+```
+
+### Migrate
+
+```bash
+pvectl vm migrate 101 --target pve2 --online --wait
+pvectl lxc migrate 201 --target pve2 --online --wait
+```
+
+## Snapshot Commands
+
+```bash
+pvectl vm snapshot ls 101
+pvectl vm snapshot create 101 before-upgrade --wait
+
+pvectl lxc snapshot ls 201
+pvectl lxc snapshot create 201 before-upgrade --wait
+```
+
+Snapshot rollback is a dangerous operation and is documented separately below.
+
+## Dangerous Operations
+
+### Delete
 
 Delete commands require a local confirmation prompt unless `--force` is passed:
 
 ```bash
 pvectl vm delete 101
+pvectl lxc delete 201
 ```
 
 The prompt requires typing the exact VMID/CTID. The `--force` flag only skips
 this local prompt; it is not passed to the Proxmox LXC delete API.
 
-## Rollback Confirmation
+Use `--wait` when scripts need completion status:
+
+```bash
+pvectl vm delete 101 --force --wait
+pvectl lxc delete 201 --force --wait
+```
+
+### Snapshot Rollback
 
 Snapshot rollback commands require typing the exact snapshot name unless
 `--force` is passed:
@@ -147,6 +166,47 @@ pvectl vm snapshot rollback 101 before-upgrade
 pvectl lxc snapshot rollback 201 before-upgrade
 ```
 
-The `--force` flag only skips this local prompt. Snapshot creation and rollback
-are asynchronous PVE tasks, so use `--wait` when scripts need completion
-status.
+The `--force` flag only skips this local prompt. Rollback is an asynchronous
+PVE task, so use `--wait` when scripts need completion status:
+
+```bash
+pvectl vm snapshot rollback 101 before-upgrade --force --wait
+pvectl lxc snapshot rollback 201 before-upgrade --force --wait
+```
+
+## Output Formats
+
+Supported output formats are `table`, `json`, and `yaml`.
+
+```bash
+pvectl node ls -o table
+pvectl vm get 100 -o json
+pvectl lxc get 200 -o yaml
+```
+
+Use `table` for interactive use, `json` for scripts and agents, and `yaml` as
+an optional human-readable structured format.
+
+## Scripting Notes
+
+Global flags:
+
+```bash
+pvectl \
+  --config ~/.config/pvectl/config.yaml \
+  --context home \
+  -o json \
+  --timeout 30s \
+  --insecure \
+  --verbose \
+  <resource> <action>
+```
+
+Async guest operations support:
+
+```bash
+pvectl vm reboot 100 --wait --wait-timeout 5m
+```
+
+Task IDs and wait progress are written to stderr. Command results are written
+to stdout.

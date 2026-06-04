@@ -22,6 +22,7 @@ type Guest interface {
 	Start(ctx context.Context) (Task, error)
 	Shutdown(ctx context.Context) (Task, error)
 	Stop(ctx context.Context) (Task, error)
+	Reboot(ctx context.Context) (Task, error)
 	Clone(ctx context.Context, options CloneOptions) (CloneResult, Task, error)
 	Config(ctx context.Context, values map[string]string) (Task, error)
 	Delete(ctx context.Context) (Task, error)

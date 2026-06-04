@@ -135,6 +135,62 @@ func TestVMCloneCommandPrintsNewVMIDAndWaits(t *testing.T) {
 	}
 }
 
+func TestVMRebootCommandWaits(t *testing.T) {
+	cfgPath := writeTestConfig(t, "table")
+	task := &commandTask{upid: "UPID:pve1:reboot"}
+	guest := &commandGuest{
+		row:  output.GuestRow{Kind: "vm", VMID: 101, Node: "pve1"},
+		task: task,
+	}
+	backend := &commandBackend{
+		nodes:    []output.NodeRow{{Name: "pve1"}},
+		vmGuests: map[string]map[int]*commandGuest{"pve1": {101: guest}},
+	}
+
+	err := RunWithDependencies([]string{
+		"pvectl", "--config", cfgPath,
+		"vm", "reboot", "101",
+		"--wait",
+	}, "test", testDeps(&bytes.Buffer{}, backend))
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !guest.rebooted {
+		t.Fatal("expected reboot")
+	}
+	if !task.waited {
+		t.Fatal("expected wait")
+	}
+}
+
+func TestLXCRebootCommandWaits(t *testing.T) {
+	cfgPath := writeTestConfig(t, "table")
+	task := &commandTask{upid: "UPID:pve1:lxcreboot"}
+	guest := &commandGuest{
+		row:  output.GuestRow{Kind: "lxc", VMID: 201, Node: "pve1"},
+		task: task,
+	}
+	backend := &commandBackend{
+		nodes:     []output.NodeRow{{Name: "pve1"}},
+		lxcGuests: map[string]map[int]*commandGuest{"pve1": {201: guest}},
+	}
+
+	err := RunWithDependencies([]string{
+		"pvectl", "--config", cfgPath,
+		"lxc", "reboot", "201",
+		"--wait",
+	}, "test", testDeps(&bytes.Buffer{}, backend))
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !guest.rebooted {
+		t.Fatal("expected reboot")
+	}
+	if !task.waited {
+		t.Fatal("expected wait")
+	}
+}
+
 func TestLXCCloneCommandMapsHostname(t *testing.T) {
 	cfgPath := writeTestConfig(t, "json")
 	task := &commandTask{upid: "UPID:pve1:lxcclone"}
@@ -683,6 +739,7 @@ type commandGuest struct {
 	cloneOptions     pve.CloneOptions
 	configValues     map[string]string
 	deleted          bool
+	rebooted         bool
 	migrateOptions   pve.MigrateOptions
 	resizeDisk       string
 	resizeSize       string
@@ -704,6 +761,11 @@ func (g *commandGuest) Shutdown(context.Context) (pve.Task, error) {
 }
 
 func (g *commandGuest) Stop(context.Context) (pve.Task, error) {
+	return g.task, nil
+}
+
+func (g *commandGuest) Reboot(context.Context) (pve.Task, error) {
+	g.rebooted = true
 	return g.task, nil
 }
 
