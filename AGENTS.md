@@ -1,0 +1,70 @@
+# AGENTS.md
+
+Guidance for agents and automation working in this repository.
+
+## Project Positioning
+
+`pvectl` is a personal HomeLab Proxmox VE CLI. It wraps the Proxmox VE API
+through `go-proxmox` and exposes resource-oriented commands for daily VM/QEMU
+and LXC operations.
+
+Keep the tool small and predictable. Do not turn it into:
+
+- a Web UI
+- a server mode or HTTP API
+- a multi-user control plane
+- an RBAC, audit, billing, or policy platform
+- a full Proxmox REST API passthrough
+
+## Repository Layout
+
+- `cmd/` contains CLI command definitions, argument parsing, confirmation
+  prompts, and command-level tests.
+- `internal/pve/` contains the Proxmox backend, guest services, task handling,
+  and `go-proxmox` wrappers.
+- `internal/config/` contains YAML config loading, saving, context selection,
+  and token-secret environment resolution.
+- `internal/output/` contains table, JSON, and YAML rendering.
+- `docs/usage.md` contains the complete command reference.
+- `README.md` should stay short and focused on the main HomeLab path.
+
+## Development Rules
+
+- Preserve existing CLI compatibility unless a task explicitly asks for a
+  breaking change.
+- Prefer the existing flow: `cmd -> internal/pve service -> go-proxmox`.
+- Reuse the current `Backend`, `Guest`, and `Task` abstractions for tests.
+- Avoid adding controllers, repositories, use cases, policy engines, servers,
+  databases, or other platform-style layers.
+- Keep dangerous operations explicit and locally confirmed unless the existing
+  `--force` behavior already applies.
+- Keep command output script-friendly: command results go to stdout; task IDs
+  and wait progress go to stderr.
+
+## Documentation Rules
+
+- Keep README examples focused on daily usage: node list, guest list/get,
+  start, shutdown, reboot, and stop.
+- Put clone, config, resize, migrate, snapshot, delete, output formats, and
+  scripting details in `docs/usage.md`.
+- Keep dangerous commands such as delete and snapshot rollback separate from
+  daily examples.
+
+## Security Rules
+
+- Never commit API token secrets or real credentials.
+- Config files should store only `token_secret_env`, not token secret values.
+- Prefer examples that use placeholder endpoints, token IDs, and environment
+  variable names.
+
+## Common Commands
+
+```bash
+make fmt
+make check
+make test
+make build
+```
+
+For documentation-only changes, `git diff --check` is sufficient unless the
+task asks for broader validation.
