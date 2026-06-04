@@ -158,6 +158,46 @@ func (g vmGuest) Stop(ctx context.Context) (Task, error) {
 	return wrapTask(task), err
 }
 
+func (g vmGuest) Clone(ctx context.Context, options CloneOptions) (CloneResult, Task, error) {
+	params := &proxmox.VirtualMachineCloneOptions{
+		NewID:       options.NewID,
+		Name:        options.Name,
+		Target:      options.Target,
+		Storage:     options.Storage,
+		Full:        proxmox.IntOrBool(options.Full),
+		Pool:        options.Pool,
+		SnapName:    options.SnapName,
+		Description: options.Description,
+		Format:      options.Format,
+	}
+	newid, task, err := g.vm.Clone(ctx, params)
+	if err != nil {
+		return CloneResult{}, nil, err
+	}
+	wrapped := wrapTask(task)
+	result := CloneResult{
+		Kind:       "vm",
+		SourceVMID: uint64(g.vm.VMID),
+		NewVMID:    uint64(newid),
+		SourceNode: g.vm.Node,
+		TargetNode: options.Target,
+		Name:       options.Name,
+	}
+	if wrapped != nil {
+		result.Task = wrapped.UPID()
+	}
+	return result, wrapped, nil
+}
+
+func (g vmGuest) Config(ctx context.Context, values map[string]string) (Task, error) {
+	options := make([]proxmox.VirtualMachineOption, 0, len(values))
+	for key, value := range values {
+		options = append(options, proxmox.VirtualMachineOption{Name: key, Value: value})
+	}
+	task, err := g.vm.Config(ctx, options...)
+	return wrapTask(task), err
+}
+
 type lxcGuest struct {
 	ct *proxmox.Container
 }
@@ -178,6 +218,45 @@ func (g lxcGuest) Shutdown(ctx context.Context) (Task, error) {
 
 func (g lxcGuest) Stop(ctx context.Context) (Task, error) {
 	task, err := g.ct.Stop(ctx)
+	return wrapTask(task), err
+}
+
+func (g lxcGuest) Clone(ctx context.Context, options CloneOptions) (CloneResult, Task, error) {
+	params := &proxmox.ContainerCloneOptions{
+		NewID:       options.NewID,
+		Hostname:    options.Hostname,
+		Target:      options.Target,
+		Storage:     options.Storage,
+		Full:        proxmox.IntOrBool(options.Full),
+		Pool:        options.Pool,
+		SnapName:    options.SnapName,
+		Description: options.Description,
+	}
+	newid, task, err := g.ct.Clone(ctx, params)
+	if err != nil {
+		return CloneResult{}, nil, err
+	}
+	wrapped := wrapTask(task)
+	result := CloneResult{
+		Kind:       "lxc",
+		SourceVMID: uint64(g.ct.VMID),
+		NewVMID:    uint64(newid),
+		SourceNode: g.ct.Node,
+		TargetNode: options.Target,
+		Name:       options.Hostname,
+	}
+	if wrapped != nil {
+		result.Task = wrapped.UPID()
+	}
+	return result, wrapped, nil
+}
+
+func (g lxcGuest) Config(ctx context.Context, values map[string]string) (Task, error) {
+	options := make([]proxmox.ContainerOption, 0, len(values))
+	for key, value := range values {
+		options = append(options, proxmox.ContainerOption{Name: key, Value: value})
+	}
+	task, err := g.ct.Config(ctx, options...)
 	return wrapTask(task), err
 }
 

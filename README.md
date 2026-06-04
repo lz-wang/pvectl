@@ -12,6 +12,8 @@ commands resource-oriented instead of exposing raw API paths.
 - List and inspect VM/QEMU guests.
 - List and inspect LXC containers.
 - Start, gracefully shut down, and stop VM/LXC guests.
+- Clone VM/QEMU and LXC guests from templates.
+- Mutate guest config with generic `--set key=value` options.
 - Optionally wait for async PVE tasks.
 - Render `table`, `json`, or `yaml` output.
 
@@ -52,10 +54,14 @@ pvectl vm get 100 -o json
 pvectl vm start 100 --wait
 pvectl vm shutdown 100 --wait
 pvectl vm stop 100
+pvectl vm clone 9000 --newid 101 --name app-vm --target pve1 --wait
+pvectl vm config 101 --set memory=4096 --set cores=4 --wait
 
 pvectl lxc ls --node pve1
 pvectl lxc get 200
 pvectl lxc start 200 --wait
+pvectl lxc clone 900 --newid 201 --hostname app-lxc --target pve1 --wait
+pvectl lxc config 201 --set memory=2048 --set cores=2 --wait
 ```
 
 See [docs/usage.md](docs/usage.md) for the complete v0.1 command list.

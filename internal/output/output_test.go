@@ -42,6 +42,31 @@ func TestWriteGuestRowsTable(t *testing.T) {
 	}
 }
 
+func TestWriteCloneResultJSON(t *testing.T) {
+	var buf bytes.Buffer
+	result := CloneResult{Kind: "vm", SourceVMID: 9000, NewVMID: 101, SourceNode: "pve1", TargetNode: "pve2", Name: "app-vm"}
+
+	if err := WriteCloneResult(&buf, "json", result); err != nil {
+		t.Fatalf("write clone json: %v", err)
+	}
+	if !strings.Contains(buf.String(), `"new_vmid": 101`) {
+		t.Fatalf("json output = %s", buf.String())
+	}
+}
+
+func TestWriteCloneResultTable(t *testing.T) {
+	var buf bytes.Buffer
+	result := CloneResult{Kind: "lxc", SourceVMID: 900, NewVMID: 201, SourceNode: "pve1", TargetNode: "pve1", Name: "app-lxc"}
+
+	if err := WriteCloneResult(&buf, "table", result); err != nil {
+		t.Fatalf("write clone table: %v", err)
+	}
+	got := buf.String()
+	if !strings.Contains(got, "NEWID") || !strings.Contains(got, "201") {
+		t.Fatalf("table output = %s", got)
+	}
+}
+
 func TestFormatUptime(t *testing.T) {
 	if got := FormatUptime(0); got != "-" {
 		t.Fatalf("zero uptime = %q", got)

@@ -24,22 +24,24 @@ func TestParseVMID(t *testing.T) {
 	}
 }
 
+func TestParseSetFlags(t *testing.T) {
+	values, err := parseSetFlags([]string{"memory=4096", "cores=4"})
+	if err != nil {
+		t.Fatalf("parse set: %v", err)
+	}
+	if values["memory"] != "4096" || values["cores"] != "4" {
+		t.Fatalf("values = %#v", values)
+	}
+
+	for _, values := range [][]string{nil, []string{"memory"}, []string{"=4096"}} {
+		if _, err := parseSetFlags(values); err == nil {
+			t.Fatalf("expected error for %#v", values)
+		}
+	}
+}
+
 func TestVMListCommandUsesDefaultOutputFromContext(t *testing.T) {
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.yaml")
-	t.Setenv("PVECTL_TOKEN", "secret")
-	cfg := config.Empty()
-	if err := cfg.SetContext("home", config.Context{
-		Endpoint:       "https://pve.example:8006/api2/json",
-		TokenID:        "root@pam!test",
-		TokenSecretEnv: "PVECTL_TOKEN",
-		DefaultOutput:  "json",
-	}); err != nil {
-		t.Fatalf("set context: %v", err)
-	}
-	if err := config.Save(cfgPath, cfg); err != nil {
-		t.Fatalf("save config: %v", err)
-	}
+	cfgPath := writeTestConfig(t, "json")
 
 	var stdout bytes.Buffer
 	backend := &commandBackend{
@@ -60,6 +62,138 @@ func TestVMListCommandUsesDefaultOutputFromContext(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), `"vmid": 100`) {
 		t.Fatalf("stdout = %s", stdout.String())
+	}
+}
+
+func TestVMCloneCommandPrintsNewVMIDAndWaits(t *testing.T) {
+	cfgPath := writeTestConfig(t, "json")
+	task := &commandTask{upid: "UPID:pve1:clone"}
+	guest := &commandGuest{
+		row:     output.GuestRow{Kind: "vm", VMID: 9000, Node: "pve1"},
+		task:    task,
+		cloneID: 101,
+	}
+	backend := &commandBackend{
+		nodes:    []output.NodeRow{{Name: "pve1"}},
+		vmGuests: map[string]map[int]*commandGuest{"pve1": {9000: guest}},
+	}
+	var stdout bytes.Buffer
+
+	err := RunWithDependencies([]string{
+		"pvectl", "--config", cfgPath,
+		"vm", "clone", "9000",
+		"--newid", "101",
+		"--name", "app-vm",
+		"--target", "pve2",
+		"--wait",
+	}, "test", testDeps(&stdout, backend))
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !strings.Contains(stdout.String(), `"new_vmid": 101`) {
+		t.Fatalf("stdout = %s", stdout.String())
+	}
+	if !task.waited {
+		t.Fatal("expected clone task to be waited")
+	}
+	if guest.cloneOptions.Name != "app-vm" || guest.cloneOptions.Target != "pve2" || guest.cloneOptions.NewID != 101 {
+		t.Fatalf("clone options = %#v", guest.cloneOptions)
+	}
+}
+
+func TestLXCCloneCommandMapsHostname(t *testing.T) {
+	cfgPath := writeTestConfig(t, "json")
+	task := &commandTask{upid: "UPID:pve1:lxcclone"}
+	guest := &commandGuest{
+		row:     output.GuestRow{Kind: "lxc", VMID: 900, Node: "pve1"},
+		task:    task,
+		cloneID: 201,
+	}
+	backend := &commandBackend{
+		nodes:     []output.NodeRow{{Name: "pve1"}},
+		lxcGuests: map[string]map[int]*commandGuest{"pve1": {900: guest}},
+	}
+	var stdout bytes.Buffer
+
+	err := RunWithDependencies([]string{
+		"pvectl", "--config", cfgPath,
+		"lxc", "clone", "900",
+		"--newid", "201",
+		"--hostname", "app-lxc",
+		"--target", "pve1",
+		"--wait",
+	}, "test", testDeps(&stdout, backend))
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !strings.Contains(stdout.String(), `"new_vmid": 201`) {
+		t.Fatalf("stdout = %s", stdout.String())
+	}
+	if !task.waited {
+		t.Fatal("expected clone task to be waited")
+	}
+	if guest.cloneOptions.Hostname != "app-lxc" || guest.cloneOptions.Target != "pve1" {
+		t.Fatalf("clone options = %#v", guest.cloneOptions)
+	}
+}
+
+func TestVMConfigCommandPassesSetValuesAndWaits(t *testing.T) {
+	cfgPath := writeTestConfig(t, "table")
+	task := &commandTask{upid: "UPID:pve1:config"}
+	guest := &commandGuest{
+		row:  output.GuestRow{Kind: "vm", VMID: 101, Node: "pve1"},
+		task: task,
+	}
+	backend := &commandBackend{
+		nodes:    []output.NodeRow{{Name: "pve1"}},
+		vmGuests: map[string]map[int]*commandGuest{"pve1": {101: guest}},
+	}
+
+	err := RunWithDependencies([]string{
+		"pvectl", "--config", cfgPath,
+		"vm", "config", "101",
+		"--set", "memory=4096",
+		"--set", "cores=4",
+		"--wait",
+	}, "test", testDeps(&bytes.Buffer{}, backend))
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !task.waited {
+		t.Fatal("expected config task to be waited")
+	}
+	if guest.configValues["memory"] != "4096" || guest.configValues["cores"] != "4" {
+		t.Fatalf("config values = %#v", guest.configValues)
+	}
+}
+
+func TestLXCConfigCommandPassesSetValues(t *testing.T) {
+	cfgPath := writeTestConfig(t, "table")
+	task := &commandTask{upid: "UPID:pve1:lxcconfig"}
+	guest := &commandGuest{
+		row:  output.GuestRow{Kind: "lxc", VMID: 201, Node: "pve1"},
+		task: task,
+	}
+	backend := &commandBackend{
+		nodes:     []output.NodeRow{{Name: "pve1"}},
+		lxcGuests: map[string]map[int]*commandGuest{"pve1": {201: guest}},
+	}
+
+	err := RunWithDependencies([]string{
+		"pvectl", "--config", cfgPath,
+		"lxc", "config", "201",
+		"--set", "memory=2048",
+		"--set", "cores=2",
+		"--wait",
+	}, "test", testDeps(&bytes.Buffer{}, backend))
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !task.waited {
+		t.Fatal("expected config task to be waited")
+	}
+	if guest.configValues["memory"] != "2048" || guest.configValues["cores"] != "2" {
+		t.Fatalf("config values = %#v", guest.configValues)
 	}
 }
 
@@ -89,9 +223,11 @@ func TestConfigSetContextCommandDoesNotRequireSecretEnv(t *testing.T) {
 }
 
 type commandBackend struct {
-	nodes []output.NodeRow
-	vms   map[string][]output.GuestRow
-	lxcs  map[string][]output.GuestRow
+	nodes     []output.NodeRow
+	vms       map[string][]output.GuestRow
+	lxcs      map[string][]output.GuestRow
+	vmGuests  map[string]map[int]*commandGuest
+	lxcGuests map[string]map[int]*commandGuest
 }
 
 func (b *commandBackend) Nodes(context.Context) ([]output.NodeRow, error) {
@@ -102,7 +238,10 @@ func (b *commandBackend) VMs(_ context.Context, node string) ([]output.GuestRow,
 	return b.vms[node], nil
 }
 
-func (b *commandBackend) VM(context.Context, string, int) (pve.Guest, error) {
+func (b *commandBackend) VM(_ context.Context, node string, vmid int) (pve.Guest, error) {
+	if guest := b.vmGuests[node][vmid]; guest != nil {
+		return guest, nil
+	}
 	return nil, pve.ErrNotFound
 }
 
@@ -110,6 +249,106 @@ func (b *commandBackend) LXCs(_ context.Context, node string) ([]output.GuestRow
 	return b.lxcs[node], nil
 }
 
-func (b *commandBackend) LXC(context.Context, string, int) (pve.Guest, error) {
+func (b *commandBackend) LXC(_ context.Context, node string, vmid int) (pve.Guest, error) {
+	if guest := b.lxcGuests[node][vmid]; guest != nil {
+		return guest, nil
+	}
 	return nil, pve.ErrNotFound
+}
+
+type commandGuest struct {
+	row          output.GuestRow
+	task         pve.Task
+	cloneID      int
+	cloneOptions pve.CloneOptions
+	configValues map[string]string
+}
+
+func (g *commandGuest) Row() output.GuestRow {
+	return g.row
+}
+
+func (g *commandGuest) Start(context.Context) (pve.Task, error) {
+	return g.task, nil
+}
+
+func (g *commandGuest) Shutdown(context.Context) (pve.Task, error) {
+	return g.task, nil
+}
+
+func (g *commandGuest) Stop(context.Context) (pve.Task, error) {
+	return g.task, nil
+}
+
+func (g *commandGuest) Clone(_ context.Context, options pve.CloneOptions) (pve.CloneResult, pve.Task, error) {
+	g.cloneOptions = options
+	name := options.Name
+	if name == "" {
+		name = options.Hostname
+	}
+	return pve.CloneResult{
+		Kind:       g.row.Kind,
+		SourceVMID: g.row.VMID,
+		NewVMID:    uint64(g.cloneID),
+		SourceNode: g.row.Node,
+		TargetNode: options.Target,
+		Name:       name,
+		Task:       g.task.UPID(),
+	}, g.task, nil
+}
+
+func (g *commandGuest) Config(_ context.Context, values map[string]string) (pve.Task, error) {
+	g.configValues = values
+	return g.task, nil
+}
+
+type commandTask struct {
+	upid   string
+	waited bool
+}
+
+func (t *commandTask) UPID() string {
+	return t.upid
+}
+
+func (t *commandTask) WaitFor(context.Context, int) error {
+	t.waited = true
+	return nil
+}
+
+func (t *commandTask) ExitStatus() string {
+	return ""
+}
+
+func (t *commandTask) Failed() bool {
+	return false
+}
+
+func writeTestConfig(t *testing.T, defaultOutput string) string {
+	t.Helper()
+	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
+	t.Setenv("PVECTL_TOKEN", "secret")
+	cfg := config.Empty()
+	if err := cfg.SetContext("home", config.Context{
+		Endpoint:       "https://pve.example:8006/api2/json",
+		TokenID:        "root@pam!test",
+		TokenSecretEnv: "PVECTL_TOKEN",
+		DefaultOutput:  defaultOutput,
+	}); err != nil {
+		t.Fatalf("set context: %v", err)
+	}
+	if err := config.Save(cfgPath, cfg); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+	return cfgPath
+}
+
+func testDeps(stdout *bytes.Buffer, backend pve.Backend) Dependencies {
+	return Dependencies{
+		Stdout: stdout,
+		Stderr: &bytes.Buffer{},
+		BackendFactory: func(config.Context, pve.ClientOptions) (pve.Backend, error) {
+			return backend, nil
+		},
+	}
 }

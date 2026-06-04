@@ -44,6 +44,16 @@ type GuestRow struct {
 	Tags    string  `json:"tags,omitempty" yaml:"tags,omitempty"`
 }
 
+type CloneResult struct {
+	Kind       string `json:"kind" yaml:"kind"`
+	SourceVMID uint64 `json:"source_vmid" yaml:"source_vmid"`
+	NewVMID    uint64 `json:"new_vmid" yaml:"new_vmid"`
+	SourceNode string `json:"source_node" yaml:"source_node"`
+	TargetNode string `json:"target_node" yaml:"target_node"`
+	Name       string `json:"name" yaml:"name"`
+	Task       string `json:"task,omitempty" yaml:"task,omitempty"`
+}
+
 func ValidateFormat(format string) error {
 	switch strings.ToLower(format) {
 	case FormatTable, FormatJSON, FormatYAML:
@@ -163,6 +173,29 @@ func WriteGuestDetail(w io.Writer, format string, row GuestRow) error {
 			if _, err := fmt.Fprintf(tw, "%s:\t%s\n", line[0], line[1]); err != nil {
 				return err
 			}
+		}
+		return tw.Flush()
+	})
+}
+
+func WriteCloneResult(w io.Writer, format string, result CloneResult) error {
+	return Write(w, format, result, func(w io.Writer) error {
+		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+		if _, err := fmt.Fprintln(tw, "KIND\tSOURCE\tNEWID\tSOURCE_NODE\tTARGET_NODE\tNAME\tTASK"); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(
+			tw,
+			"%s\t%d\t%d\t%s\t%s\t%s\t%s\n",
+			result.Kind,
+			result.SourceVMID,
+			result.NewVMID,
+			result.SourceNode,
+			result.TargetNode,
+			empty(result.Name),
+			empty(result.Task),
+		); err != nil {
+			return err
 		}
 		return tw.Flush()
 	})

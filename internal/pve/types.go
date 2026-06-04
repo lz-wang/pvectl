@@ -22,6 +22,8 @@ type Guest interface {
 	Start(ctx context.Context) (Task, error)
 	Shutdown(ctx context.Context) (Task, error)
 	Stop(ctx context.Context) (Task, error)
+	Clone(ctx context.Context, options CloneOptions) (CloneResult, Task, error)
+	Config(ctx context.Context, values map[string]string) (Task, error)
 }
 
 type Task interface {
@@ -30,3 +32,18 @@ type Task interface {
 	ExitStatus() string
 	Failed() bool
 }
+
+type CloneOptions struct {
+	NewID       int
+	Name        string
+	Hostname    string
+	Target      string
+	Storage     string
+	Full        bool
+	Pool        string
+	SnapName    string
+	Description string
+	Format      string
+}
+
+type CloneResult = output.CloneResult

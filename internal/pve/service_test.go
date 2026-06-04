@@ -88,6 +88,59 @@ func TestTaskRunnerWaitsAndReportsFailure(t *testing.T) {
 	}
 }
 
+func TestGuestServiceCloneReturnsNewIDAndWaits(t *testing.T) {
+	task := &fakeTask{upid: "UPID:pve1:clone"}
+	guest := &fakeGuest{
+		row:       output.GuestRow{Kind: "vm", VMID: 9000, Node: "pve1", Name: "tmpl"},
+		task:      task,
+		cloneID:   101,
+		cloneName: "app-vm",
+	}
+	backend := &fakeBackend{
+		nodes: []output.NodeRow{{Name: "pve1"}},
+		vms:   map[string]map[int]*fakeGuest{"pve1": {9000: guest}},
+	}
+	svc := NewVMService(backend, TaskRunner{Wait: true}, nil, false)
+
+	result, err := svc.Clone(context.Background(), 9000, "", CloneOptions{Name: "app-vm", Target: "pve2"})
+	if err != nil {
+		t.Fatalf("clone: %v", err)
+	}
+	if result.NewVMID != 101 || result.Task != "UPID:pve1:clone" {
+		t.Fatalf("result = %#v", result)
+	}
+	if !task.waited {
+		t.Fatal("expected clone task to be waited")
+	}
+	if guest.cloneOptions.Target != "pve2" || guest.cloneOptions.Name != "app-vm" {
+		t.Fatalf("clone options = %#v", guest.cloneOptions)
+	}
+}
+
+func TestGuestServiceConfigPassesValuesAndWaits(t *testing.T) {
+	task := &fakeTask{upid: "UPID:pve1:config"}
+	guest := &fakeGuest{
+		row:  output.GuestRow{Kind: "vm", VMID: 101, Node: "pve1"},
+		task: task,
+	}
+	backend := &fakeBackend{
+		nodes: []output.NodeRow{{Name: "pve1"}},
+		vms:   map[string]map[int]*fakeGuest{"pve1": {101: guest}},
+	}
+	svc := NewVMService(backend, TaskRunner{Wait: true}, nil, false)
+
+	err := svc.Config(context.Background(), 101, "", map[string]string{"memory": "4096", "cores": "4"})
+	if err != nil {
+		t.Fatalf("config: %v", err)
+	}
+	if !task.waited {
+		t.Fatal("expected config task to be waited")
+	}
+	if guest.configValues["memory"] != "4096" || guest.configValues["cores"] != "4" {
+		t.Fatalf("config values = %#v", guest.configValues)
+	}
+}
+
 type fakeBackend struct {
 	nodes   []output.NodeRow
 	vms     map[string]map[int]*fakeGuest
@@ -133,8 +186,12 @@ func (b *fakeBackend) LXC(_ context.Context, node string, vmid int) (Guest, erro
 }
 
 type fakeGuest struct {
-	row  output.GuestRow
-	task Task
+	row          output.GuestRow
+	task         Task
+	cloneID      int
+	cloneName    string
+	cloneOptions CloneOptions
+	configValues map[string]string
 }
 
 func (g *fakeGuest) Row() output.GuestRow {
@@ -150,6 +207,31 @@ func (g *fakeGuest) Shutdown(context.Context) (Task, error) {
 }
 
 func (g *fakeGuest) Stop(context.Context) (Task, error) {
+	return g.task, nil
+}
+
+func (g *fakeGuest) Clone(_ context.Context, options CloneOptions) (CloneResult, Task, error) {
+	g.cloneOptions = options
+	name := options.Name
+	if name == "" {
+		name = options.Hostname
+	}
+	if name == "" {
+		name = g.cloneName
+	}
+	return CloneResult{
+		Kind:       g.row.Kind,
+		SourceVMID: g.row.VMID,
+		NewVMID:    uint64(g.cloneID),
+		SourceNode: g.row.Node,
+		TargetNode: options.Target,
+		Name:       name,
+		Task:       g.task.UPID(),
+	}, g.task, nil
+}
+
+func (g *fakeGuest) Config(_ context.Context, values map[string]string) (Task, error) {
+	g.configValues = values
 	return g.task, nil
 }
 

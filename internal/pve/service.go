@@ -97,6 +97,46 @@ func (s *GuestService) Stop(ctx context.Context, vmid int, node string) error {
 	})
 }
 
+func (s *GuestService) Clone(ctx context.Context, vmid int, node string, options CloneOptions) (CloneResult, error) {
+	if options.Target == "" {
+		return CloneResult{}, fmt.Errorf("target node is required")
+	}
+	if s.kind == "vm" && options.Name == "" {
+		return CloneResult{}, fmt.Errorf("name is required")
+	}
+	if s.kind == "lxc" && options.Hostname == "" {
+		return CloneResult{}, fmt.Errorf("hostname is required")
+	}
+
+	guest, err := s.resolve(ctx, vmid, node)
+	if err != nil {
+		return CloneResult{}, err
+	}
+	result, task, err := guest.Clone(ctx, options)
+	if err != nil {
+		return CloneResult{}, err
+	}
+	if err := s.tasks.Handle(ctx, task); err != nil {
+		return CloneResult{}, err
+	}
+	return result, nil
+}
+
+func (s *GuestService) Config(ctx context.Context, vmid int, node string, values map[string]string) error {
+	if len(values) == 0 {
+		return fmt.Errorf("at least one --set key=value is required")
+	}
+	guest, err := s.resolve(ctx, vmid, node)
+	if err != nil {
+		return err
+	}
+	task, err := guest.Config(ctx, values)
+	if err != nil {
+		return err
+	}
+	return s.tasks.Handle(ctx, task)
+}
+
 func (s *GuestService) run(ctx context.Context, vmid int, node string, action func(Guest) (Task, error)) error {
 	guest, err := s.resolve(ctx, vmid, node)
 	if err != nil {
