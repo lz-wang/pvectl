@@ -1,0 +1,164 @@
+package pve
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+
+	"github.com/lz-wang/pvectl/internal/output"
+)
+
+type NodeService struct {
+	backend Backend
+}
+
+func NewNodeService(backend Backend) *NodeService {
+	return &NodeService{backend: backend}
+}
+
+func (s *NodeService) List(ctx context.Context) ([]output.NodeRow, error) {
+	return s.backend.Nodes(ctx)
+}
+
+type GuestService struct {
+	kind    string
+	backend Backend
+	tasks   TaskRunner
+	logger  *slog.Logger
+	verbose bool
+}
+
+func NewVMService(backend Backend, tasks TaskRunner, logger *slog.Logger, verbose bool) *GuestService {
+	return &GuestService{kind: "vm", backend: backend, tasks: tasks, logger: logger, verbose: verbose}
+}
+
+func NewLXCService(backend Backend, tasks TaskRunner, logger *slog.Logger, verbose bool) *GuestService {
+	return &GuestService{kind: "lxc", backend: backend, tasks: tasks, logger: logger, verbose: verbose}
+}
+
+func (s *GuestService) List(ctx context.Context, node string) ([]output.GuestRow, error) {
+	if node != "" {
+		return s.listOnNode(ctx, node)
+	}
+
+	nodes, err := s.backend.Nodes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rows := make([]output.GuestRow, 0)
+	successes := 0
+	var firstErr error
+	for _, nodeRow := range nodes {
+		if nodeRow.Name == "" {
+			continue
+		}
+		nodeRows, err := s.listOnNode(ctx, nodeRow.Name)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			s.debug("skip node", "node", nodeRow.Name, "error", err)
+			continue
+		}
+		successes++
+		rows = append(rows, nodeRows...)
+	}
+
+	if successes == 0 && firstErr != nil {
+		return nil, fmt.Errorf("list %s: no nodes could be queried: %w", s.kind, firstErr)
+	}
+	return rows, nil
+}
+
+func (s *GuestService) Get(ctx context.Context, vmid int, node string) (output.GuestRow, error) {
+	guest, err := s.resolve(ctx, vmid, node)
+	if err != nil {
+		return output.GuestRow{}, err
+	}
+	return guest.Row(), nil
+}
+
+func (s *GuestService) Start(ctx context.Context, vmid int, node string) error {
+	return s.run(ctx, vmid, node, func(guest Guest) (Task, error) {
+		return guest.Start(ctx)
+	})
+}
+
+func (s *GuestService) Shutdown(ctx context.Context, vmid int, node string) error {
+	return s.run(ctx, vmid, node, func(guest Guest) (Task, error) {
+		return guest.Shutdown(ctx)
+	})
+}
+
+func (s *GuestService) Stop(ctx context.Context, vmid int, node string) error {
+	return s.run(ctx, vmid, node, func(guest Guest) (Task, error) {
+		return guest.Stop(ctx)
+	})
+}
+
+func (s *GuestService) run(ctx context.Context, vmid int, node string, action func(Guest) (Task, error)) error {
+	guest, err := s.resolve(ctx, vmid, node)
+	if err != nil {
+		return err
+	}
+	task, err := action(guest)
+	if err != nil {
+		return err
+	}
+	return s.tasks.Handle(ctx, task)
+}
+
+func (s *GuestService) resolve(ctx context.Context, vmid int, node string) (Guest, error) {
+	if vmid <= 0 {
+		return nil, fmt.Errorf("invalid vmid %d", vmid)
+	}
+	if node != "" {
+		return s.getOnNode(ctx, node, vmid)
+	}
+
+	nodes, err := s.backend.Nodes(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var firstErr error
+	for _, nodeRow := range nodes {
+		if nodeRow.Name == "" {
+			continue
+		}
+		guest, err := s.getOnNode(ctx, nodeRow.Name, vmid)
+		if err == nil {
+			return guest, nil
+		}
+		if firstErr == nil {
+			firstErr = err
+		}
+		s.debug("skip node", "node", nodeRow.Name, "error", err)
+	}
+
+	if firstErr != nil {
+		return nil, fmt.Errorf("%s %d not found", s.kind, vmid)
+	}
+	return nil, fmt.Errorf("%s %d not found", s.kind, vmid)
+}
+
+func (s *GuestService) listOnNode(ctx context.Context, node string) ([]output.GuestRow, error) {
+	if s.kind == "vm" {
+		return s.backend.VMs(ctx, node)
+	}
+	return s.backend.LXCs(ctx, node)
+}
+
+func (s *GuestService) getOnNode(ctx context.Context, node string, vmid int) (Guest, error) {
+	if s.kind == "vm" {
+		return s.backend.VM(ctx, node, vmid)
+	}
+	return s.backend.LXC(ctx, node, vmid)
+}
+
+func (s *GuestService) debug(msg string, args ...any) {
+	if s.verbose && s.logger != nil {
+		s.logger.Debug(msg, args...)
+	}
+}
