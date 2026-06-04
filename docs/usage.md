@@ -80,6 +80,9 @@ pvectl vm stop 100
 pvectl vm clone 9000 --newid 101 --name app-vm --target pve1 --wait
 pvectl vm clone 9000 --name app-vm --target pve1 --storage local-lvm --full --wait
 pvectl vm config 101 --set memory=4096 --set cores=4 --wait
+pvectl vm migrate 101 --target pve2 --online --wait
+pvectl vm resize 101 --disk scsi0 --size +20G --wait
+pvectl vm delete 101 --force
 ```
 
 When `--node` is omitted, `pvectl` traverses all nodes returned by the cluster
@@ -106,6 +109,9 @@ pvectl lxc stop 200
 pvectl lxc clone 900 --newid 201 --hostname app-lxc --target pve1 --wait
 pvectl lxc clone 900 --hostname app-lxc --target pve1 --storage local-lvm --full --wait
 pvectl lxc config 201 --set memory=2048 --set cores=2 --wait
+pvectl lxc migrate 201 --target pve2 --online --wait
+pvectl lxc resize 201 --disk rootfs --size +10G --wait
+pvectl lxc delete 201 --force
 ```
 
 When `--node` is omitted, `pvectl` traverses all nodes returned by the cluster
@@ -113,3 +119,14 @@ and resolves the CTID automatically.
 
 For clone, omit `--newid` to let Proxmox allocate the next available CTID.
 The JSON/YAML field is still named `new_vmid` to match the existing guest DTOs.
+
+## Delete Confirmation
+
+Delete commands require a local confirmation prompt unless `--force` is passed:
+
+```bash
+pvectl vm delete 101
+```
+
+The prompt requires typing the exact VMID/CTID. The `--force` flag only skips
+this local prompt; it is not passed to the Proxmox LXC delete API.

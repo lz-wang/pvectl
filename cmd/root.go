@@ -18,6 +18,7 @@ type BackendFactory func(config.Context, pve.ClientOptions) (pve.Backend, error)
 
 type Dependencies struct {
 	BackendFactory BackendFactory
+	Stdin          io.Reader
 	Stdout         io.Writer
 	Stderr         io.Writer
 }
@@ -104,6 +105,9 @@ func NewAppWithDependencies(version string, deps Dependencies) *cli.App {
 func (d Dependencies) withDefaults() Dependencies {
 	if d.BackendFactory == nil {
 		d.BackendFactory = pve.NewProxmoxBackend
+	}
+	if d.Stdin == nil {
+		d.Stdin = os.Stdin
 	}
 	if d.Stdout == nil {
 		d.Stdout = os.Stdout

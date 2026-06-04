@@ -70,6 +70,9 @@ func newGuestCommand(kind, usage string, deps Dependencies) *cli.Command {
 			guestControlCommand(kind, "stop", "Stop a guest immediately", deps),
 			guestCloneCommand(kind, deps),
 			guestConfigCommand(kind, deps),
+			guestDeleteCommand(kind, deps),
+			guestMigrateCommand(kind, deps),
+			guestResizeCommand(kind, deps),
 		},
 	}
 }
@@ -197,6 +200,105 @@ func guestConfigCommand(kind string, deps Dependencies) *cli.Command {
 				return err
 			}
 			return guestService(kind, rt).Config(c.Context, vmid, c.String("node"), values)
+		},
+	}
+}
+
+func guestDeleteCommand(kind string, deps Dependencies) *cli.Command {
+	return &cli.Command{
+		Name:      "delete",
+		Usage:     "Delete a guest",
+		ArgsUsage: "VMID",
+		Flags: []cli.Flag{
+			&cli.StringFlag{Name: "node", Usage: "PVE node name"},
+			&cli.BoolFlag{Name: "force", Usage: "skip local delete confirmation"},
+			&cli.BoolFlag{Name: "wait", Usage: "wait for async task completion"},
+			&cli.DurationFlag{Name: "wait-timeout", Usage: "task wait timeout"},
+		},
+		Action: func(c *cli.Context) error {
+			if err := requireNoExtraArgs(c, 1); err != nil {
+				return err
+			}
+			vmid, err := parseVMID(c.Args().First())
+			if err != nil {
+				return err
+			}
+			rt, err := buildRuntime(c, deps)
+			if err != nil {
+				return err
+			}
+			svc := guestService(kind, rt)
+			if !c.Bool("force") {
+				row, err := svc.Get(c.Context, vmid, c.String("node"))
+				if err != nil {
+					return err
+				}
+				if err := confirmDelete(deps.withDefaults().Stdin, rt.stderr, kind, row.VMID, row.Node); err != nil {
+					return err
+				}
+			}
+			return svc.Delete(c.Context, vmid, c.String("node"))
+		},
+	}
+}
+
+func guestMigrateCommand(kind string, deps Dependencies) *cli.Command {
+	return &cli.Command{
+		Name:      "migrate",
+		Usage:     "Migrate a guest to another node",
+		ArgsUsage: "VMID",
+		Flags: []cli.Flag{
+			&cli.StringFlag{Name: "node", Usage: "source PVE node name"},
+			&cli.StringFlag{Name: "target", Usage: "target PVE node name", Required: true},
+			&cli.BoolFlag{Name: "online", Usage: "request online migration"},
+			&cli.BoolFlag{Name: "wait", Usage: "wait for async task completion"},
+			&cli.DurationFlag{Name: "wait-timeout", Usage: "task wait timeout"},
+		},
+		Action: func(c *cli.Context) error {
+			if err := requireNoExtraArgs(c, 1); err != nil {
+				return err
+			}
+			vmid, err := parseVMID(c.Args().First())
+			if err != nil {
+				return err
+			}
+			rt, err := buildRuntime(c, deps)
+			if err != nil {
+				return err
+			}
+			return guestService(kind, rt).Migrate(c.Context, vmid, c.String("node"), pve.MigrateOptions{
+				Target: c.String("target"),
+				Online: c.Bool("online"),
+			})
+		},
+	}
+}
+
+func guestResizeCommand(kind string, deps Dependencies) *cli.Command {
+	return &cli.Command{
+		Name:      "resize",
+		Usage:     "Resize a guest disk",
+		ArgsUsage: "VMID",
+		Flags: []cli.Flag{
+			&cli.StringFlag{Name: "node", Usage: "PVE node name"},
+			&cli.StringFlag{Name: "disk", Usage: "disk identifier", Required: true},
+			&cli.StringFlag{Name: "size", Usage: "new size or increment, for example +20G", Required: true},
+			&cli.BoolFlag{Name: "wait", Usage: "wait for async task completion"},
+			&cli.DurationFlag{Name: "wait-timeout", Usage: "task wait timeout"},
+		},
+		Action: func(c *cli.Context) error {
+			if err := requireNoExtraArgs(c, 1); err != nil {
+				return err
+			}
+			vmid, err := parseVMID(c.Args().First())
+			if err != nil {
+				return err
+			}
+			rt, err := buildRuntime(c, deps)
+			if err != nil {
+				return err
+			}
+			return guestService(kind, rt).Resize(c.Context, vmid, c.String("node"), c.String("disk"), c.String("size"))
 		},
 	}
 }

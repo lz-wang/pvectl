@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 
@@ -46,4 +48,21 @@ func parseSetFlags(items []string) (map[string]string, error) {
 		result[key] = value
 	}
 	return result, nil
+}
+
+func confirmDelete(in io.Reader, out io.Writer, kind string, vmid uint64, node string) error {
+	if in == nil {
+		return fmt.Errorf("delete aborted")
+	}
+	if out != nil {
+		fmt.Fprintf(out, "delete %s %d on node %s? type %d to confirm: ", kind, vmid, node, vmid)
+	}
+	scanner := bufio.NewScanner(in)
+	if !scanner.Scan() {
+		return fmt.Errorf("delete aborted")
+	}
+	if strings.TrimSpace(scanner.Text()) != strconv.FormatUint(vmid, 10) {
+		return fmt.Errorf("delete aborted")
+	}
+	return nil
 }

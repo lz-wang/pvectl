@@ -137,6 +137,33 @@ func (s *GuestService) Config(ctx context.Context, vmid int, node string, values
 	return s.tasks.Handle(ctx, task)
 }
 
+func (s *GuestService) Delete(ctx context.Context, vmid int, node string) error {
+	return s.run(ctx, vmid, node, func(guest Guest) (Task, error) {
+		return guest.Delete(ctx)
+	})
+}
+
+func (s *GuestService) Migrate(ctx context.Context, vmid int, node string, options MigrateOptions) error {
+	if options.Target == "" {
+		return fmt.Errorf("target node is required")
+	}
+	return s.run(ctx, vmid, node, func(guest Guest) (Task, error) {
+		return guest.Migrate(ctx, options)
+	})
+}
+
+func (s *GuestService) Resize(ctx context.Context, vmid int, node, disk, size string) error {
+	if disk == "" {
+		return fmt.Errorf("disk is required")
+	}
+	if size == "" {
+		return fmt.Errorf("size is required")
+	}
+	return s.run(ctx, vmid, node, func(guest Guest) (Task, error) {
+		return guest.Resize(ctx, disk, size)
+	})
+}
+
 func (s *GuestService) run(ctx context.Context, vmid int, node string, action func(Guest) (Task, error)) error {
 	guest, err := s.resolve(ctx, vmid, node)
 	if err != nil {

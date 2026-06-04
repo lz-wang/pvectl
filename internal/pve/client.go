@@ -198,6 +198,24 @@ func (g vmGuest) Config(ctx context.Context, values map[string]string) (Task, er
 	return wrapTask(task), err
 }
 
+func (g vmGuest) Delete(ctx context.Context) (Task, error) {
+	task, err := g.vm.Delete(ctx)
+	return wrapTask(task), err
+}
+
+func (g vmGuest) Migrate(ctx context.Context, options MigrateOptions) (Task, error) {
+	task, err := g.vm.Migrate(ctx, &proxmox.VirtualMachineMigrateOptions{
+		Target: options.Target,
+		Online: proxmox.IntOrBool(options.Online),
+	})
+	return wrapTask(task), err
+}
+
+func (g vmGuest) Resize(ctx context.Context, disk, size string) (Task, error) {
+	task, err := g.vm.ResizeDisk(ctx, disk, size)
+	return wrapTask(task), err
+}
+
 type lxcGuest struct {
 	ct *proxmox.Container
 }
@@ -257,6 +275,24 @@ func (g lxcGuest) Config(ctx context.Context, values map[string]string) (Task, e
 		options = append(options, proxmox.ContainerOption{Name: key, Value: value})
 	}
 	task, err := g.ct.Config(ctx, options...)
+	return wrapTask(task), err
+}
+
+func (g lxcGuest) Delete(ctx context.Context) (Task, error) {
+	task, err := g.ct.Delete(ctx, nil)
+	return wrapTask(task), err
+}
+
+func (g lxcGuest) Migrate(ctx context.Context, options MigrateOptions) (Task, error) {
+	task, err := g.ct.Migrate(ctx, &proxmox.ContainerMigrateOptions{
+		Target: options.Target,
+		Online: proxmox.IntOrBool(options.Online),
+	})
+	return wrapTask(task), err
+}
+
+func (g lxcGuest) Resize(ctx context.Context, disk, size string) (Task, error) {
+	task, err := g.ct.Resize(ctx, disk, size)
 	return wrapTask(task), err
 }
 

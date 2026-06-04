@@ -40,6 +40,23 @@ func TestParseSetFlags(t *testing.T) {
 	}
 }
 
+func TestConfirmDelete(t *testing.T) {
+	var stderr bytes.Buffer
+	if err := confirmDelete(strings.NewReader("101\n"), &stderr, "vm", 101, "pve1"); err != nil {
+		t.Fatalf("confirm delete: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "delete vm 101 on node pve1") {
+		t.Fatalf("prompt = %q", stderr.String())
+	}
+
+	if err := confirmDelete(strings.NewReader("102\n"), &bytes.Buffer{}, "vm", 101, "pve1"); err == nil {
+		t.Fatal("expected mismatch to abort")
+	}
+	if err := confirmDelete(strings.NewReader(""), &bytes.Buffer{}, "vm", 101, "pve1"); err == nil {
+		t.Fatal("expected EOF to abort")
+	}
+}
+
 func TestVMListCommandUsesDefaultOutputFromContext(t *testing.T) {
 	cfgPath := writeTestConfig(t, "json")
 
@@ -197,6 +214,201 @@ func TestLXCConfigCommandPassesSetValues(t *testing.T) {
 	}
 }
 
+func TestVMDeleteCommandForceSkipsConfirmation(t *testing.T) {
+	cfgPath := writeTestConfig(t, "table")
+	task := &commandTask{upid: "UPID:pve1:delete"}
+	guest := &commandGuest{
+		row:  output.GuestRow{Kind: "vm", VMID: 101, Node: "pve1"},
+		task: task,
+	}
+	backend := &commandBackend{
+		nodes:    []output.NodeRow{{Name: "pve1"}},
+		vmGuests: map[string]map[int]*commandGuest{"pve1": {101: guest}},
+	}
+
+	err := RunWithDependencies([]string{
+		"pvectl", "--config", cfgPath,
+		"vm", "delete", "101",
+		"--force",
+	}, "test", testDeps(&bytes.Buffer{}, backend))
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !guest.deleted {
+		t.Fatal("expected delete")
+	}
+	if task.waited {
+		t.Fatal("did not expect wait without --wait")
+	}
+}
+
+func TestLXCDeleteCommandConfirmsAndWaits(t *testing.T) {
+	cfgPath := writeTestConfig(t, "table")
+	task := &commandTask{upid: "UPID:pve1:lxcdelete"}
+	guest := &commandGuest{
+		row:  output.GuestRow{Kind: "lxc", VMID: 201, Node: "pve1"},
+		task: task,
+	}
+	backend := &commandBackend{
+		nodes:     []output.NodeRow{{Name: "pve1"}},
+		lxcGuests: map[string]map[int]*commandGuest{"pve1": {201: guest}},
+	}
+	deps := testDeps(&bytes.Buffer{}, backend)
+	deps.Stdin = strings.NewReader("201\n")
+
+	err := RunWithDependencies([]string{
+		"pvectl", "--config", cfgPath,
+		"lxc", "delete", "201",
+		"--wait",
+	}, "test", deps)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !guest.deleted {
+		t.Fatal("expected delete")
+	}
+	if !task.waited {
+		t.Fatal("expected wait")
+	}
+}
+
+func TestDeleteCommandAbortsOnConfirmationMismatch(t *testing.T) {
+	cfgPath := writeTestConfig(t, "table")
+	guest := &commandGuest{
+		row:  output.GuestRow{Kind: "vm", VMID: 101, Node: "pve1"},
+		task: &commandTask{upid: "UPID:pve1:delete"},
+	}
+	backend := &commandBackend{
+		nodes:    []output.NodeRow{{Name: "pve1"}},
+		vmGuests: map[string]map[int]*commandGuest{"pve1": {101: guest}},
+	}
+	deps := testDeps(&bytes.Buffer{}, backend)
+	deps.Stdin = strings.NewReader("102\n")
+
+	err := RunWithDependencies([]string{
+		"pvectl", "--config", cfgPath,
+		"vm", "delete", "101",
+	}, "test", deps)
+	if err == nil {
+		t.Fatal("expected abort error")
+	}
+	if guest.deleted {
+		t.Fatal("delete should not run after confirmation mismatch")
+	}
+}
+
+func TestVMMigrateCommandPassesTargetOnlineAndWaits(t *testing.T) {
+	cfgPath := writeTestConfig(t, "table")
+	task := &commandTask{upid: "UPID:pve1:migrate"}
+	guest := &commandGuest{
+		row:  output.GuestRow{Kind: "vm", VMID: 101, Node: "pve1"},
+		task: task,
+	}
+	backend := &commandBackend{
+		nodes:    []output.NodeRow{{Name: "pve1"}},
+		vmGuests: map[string]map[int]*commandGuest{"pve1": {101: guest}},
+	}
+
+	err := RunWithDependencies([]string{
+		"pvectl", "--config", cfgPath,
+		"vm", "migrate", "101",
+		"--target", "pve2",
+		"--online",
+		"--wait",
+	}, "test", testDeps(&bytes.Buffer{}, backend))
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if guest.migrateOptions.Target != "pve2" || !guest.migrateOptions.Online {
+		t.Fatalf("migrate options = %#v", guest.migrateOptions)
+	}
+	if !task.waited {
+		t.Fatal("expected wait")
+	}
+}
+
+func TestLXCMigrateCommandPassesTargetOnline(t *testing.T) {
+	cfgPath := writeTestConfig(t, "table")
+	guest := &commandGuest{
+		row:  output.GuestRow{Kind: "lxc", VMID: 201, Node: "pve1"},
+		task: &commandTask{upid: "UPID:pve1:lxcmigrate"},
+	}
+	backend := &commandBackend{
+		nodes:     []output.NodeRow{{Name: "pve1"}},
+		lxcGuests: map[string]map[int]*commandGuest{"pve1": {201: guest}},
+	}
+
+	err := RunWithDependencies([]string{
+		"pvectl", "--config", cfgPath,
+		"lxc", "migrate", "201",
+		"--target", "pve2",
+		"--online",
+		"--wait",
+	}, "test", testDeps(&bytes.Buffer{}, backend))
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if guest.migrateOptions.Target != "pve2" || !guest.migrateOptions.Online {
+		t.Fatalf("migrate options = %#v", guest.migrateOptions)
+	}
+}
+
+func TestVMResizeCommandPassesDiskSizeAndWaits(t *testing.T) {
+	cfgPath := writeTestConfig(t, "table")
+	task := &commandTask{upid: "UPID:pve1:resize"}
+	guest := &commandGuest{
+		row:  output.GuestRow{Kind: "vm", VMID: 101, Node: "pve1"},
+		task: task,
+	}
+	backend := &commandBackend{
+		nodes:    []output.NodeRow{{Name: "pve1"}},
+		vmGuests: map[string]map[int]*commandGuest{"pve1": {101: guest}},
+	}
+
+	err := RunWithDependencies([]string{
+		"pvectl", "--config", cfgPath,
+		"vm", "resize", "101",
+		"--disk", "scsi0",
+		"--size", "+20G",
+		"--wait",
+	}, "test", testDeps(&bytes.Buffer{}, backend))
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if guest.resizeDisk != "scsi0" || guest.resizeSize != "+20G" {
+		t.Fatalf("resize = %s/%s", guest.resizeDisk, guest.resizeSize)
+	}
+	if !task.waited {
+		t.Fatal("expected wait")
+	}
+}
+
+func TestLXCResizeCommandPassesDiskSize(t *testing.T) {
+	cfgPath := writeTestConfig(t, "table")
+	guest := &commandGuest{
+		row:  output.GuestRow{Kind: "lxc", VMID: 201, Node: "pve1"},
+		task: &commandTask{upid: "UPID:pve1:lxcresize"},
+	}
+	backend := &commandBackend{
+		nodes:     []output.NodeRow{{Name: "pve1"}},
+		lxcGuests: map[string]map[int]*commandGuest{"pve1": {201: guest}},
+	}
+
+	err := RunWithDependencies([]string{
+		"pvectl", "--config", cfgPath,
+		"lxc", "resize", "201",
+		"--disk", "rootfs",
+		"--size", "+10G",
+		"--wait",
+	}, "test", testDeps(&bytes.Buffer{}, backend))
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if guest.resizeDisk != "rootfs" || guest.resizeSize != "+10G" {
+		t.Fatalf("resize = %s/%s", guest.resizeDisk, guest.resizeSize)
+	}
+}
+
 func TestConfigSetContextCommandDoesNotRequireSecretEnv(t *testing.T) {
 	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
 	err := RunWithDependencies([]string{
@@ -257,11 +469,15 @@ func (b *commandBackend) LXC(_ context.Context, node string, vmid int) (pve.Gues
 }
 
 type commandGuest struct {
-	row          output.GuestRow
-	task         pve.Task
-	cloneID      int
-	cloneOptions pve.CloneOptions
-	configValues map[string]string
+	row            output.GuestRow
+	task           pve.Task
+	cloneID        int
+	cloneOptions   pve.CloneOptions
+	configValues   map[string]string
+	deleted        bool
+	migrateOptions pve.MigrateOptions
+	resizeDisk     string
+	resizeSize     string
 }
 
 func (g *commandGuest) Row() output.GuestRow {
@@ -299,6 +515,22 @@ func (g *commandGuest) Clone(_ context.Context, options pve.CloneOptions) (pve.C
 
 func (g *commandGuest) Config(_ context.Context, values map[string]string) (pve.Task, error) {
 	g.configValues = values
+	return g.task, nil
+}
+
+func (g *commandGuest) Delete(context.Context) (pve.Task, error) {
+	g.deleted = true
+	return g.task, nil
+}
+
+func (g *commandGuest) Migrate(_ context.Context, options pve.MigrateOptions) (pve.Task, error) {
+	g.migrateOptions = options
+	return g.task, nil
+}
+
+func (g *commandGuest) Resize(_ context.Context, disk, size string) (pve.Task, error) {
+	g.resizeDisk = disk
+	g.resizeSize = size
 	return g.task, nil
 }
 

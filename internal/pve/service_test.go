@@ -141,6 +141,93 @@ func TestGuestServiceConfigPassesValuesAndWaits(t *testing.T) {
 	}
 }
 
+func TestGuestServiceDeleteWaits(t *testing.T) {
+	task := &fakeTask{upid: "UPID:pve1:delete"}
+	guest := &fakeGuest{
+		row:  output.GuestRow{Kind: "vm", VMID: 101, Node: "pve1"},
+		task: task,
+	}
+	backend := &fakeBackend{
+		nodes: []output.NodeRow{{Name: "pve1"}},
+		vms:   map[string]map[int]*fakeGuest{"pve1": {101: guest}},
+	}
+	svc := NewVMService(backend, TaskRunner{Wait: true}, nil, false)
+
+	err := svc.Delete(context.Background(), 101, "")
+	if err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if !guest.deleted {
+		t.Fatal("expected guest to be deleted")
+	}
+	if !task.waited {
+		t.Fatal("expected delete task to be waited")
+	}
+}
+
+func TestGuestServiceMigratePassesOptions(t *testing.T) {
+	task := &fakeTask{upid: "UPID:pve1:migrate"}
+	guest := &fakeGuest{
+		row:  output.GuestRow{Kind: "vm", VMID: 101, Node: "pve1"},
+		task: task,
+	}
+	backend := &fakeBackend{
+		nodes: []output.NodeRow{{Name: "pve1"}},
+		vms:   map[string]map[int]*fakeGuest{"pve1": {101: guest}},
+	}
+	svc := NewVMService(backend, TaskRunner{Wait: true}, nil, false)
+
+	err := svc.Migrate(context.Background(), 101, "", MigrateOptions{Target: "pve2", Online: true})
+	if err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if guest.migrateOptions.Target != "pve2" || !guest.migrateOptions.Online {
+		t.Fatalf("migrate options = %#v", guest.migrateOptions)
+	}
+}
+
+func TestGuestServiceResizePassesDiskAndSize(t *testing.T) {
+	task := &fakeTask{upid: "UPID:pve1:resize"}
+	guest := &fakeGuest{
+		row:  output.GuestRow{Kind: "vm", VMID: 101, Node: "pve1"},
+		task: task,
+	}
+	backend := &fakeBackend{
+		nodes: []output.NodeRow{{Name: "pve1"}},
+		vms:   map[string]map[int]*fakeGuest{"pve1": {101: guest}},
+	}
+	svc := NewVMService(backend, TaskRunner{Wait: true}, nil, false)
+
+	err := svc.Resize(context.Background(), 101, "", "scsi0", "+20G")
+	if err != nil {
+		t.Fatalf("resize: %v", err)
+	}
+	if guest.resizeDisk != "scsi0" || guest.resizeSize != "+20G" {
+		t.Fatalf("resize = %s/%s", guest.resizeDisk, guest.resizeSize)
+	}
+}
+
+func TestGuestServiceOperationTaskFailure(t *testing.T) {
+	task := &fakeTask{upid: "UPID:pve1:delete", failed: true, exitStatus: "ERROR"}
+	guest := &fakeGuest{
+		row:  output.GuestRow{Kind: "vm", VMID: 101, Node: "pve1"},
+		task: task,
+	}
+	backend := &fakeBackend{
+		nodes: []output.NodeRow{{Name: "pve1"}},
+		vms:   map[string]map[int]*fakeGuest{"pve1": {101: guest}},
+	}
+	svc := NewVMService(backend, TaskRunner{Wait: true}, nil, false)
+
+	err := svc.Delete(context.Background(), 101, "")
+	if err == nil {
+		t.Fatal("expected task failure")
+	}
+	if got := err.Error(); got != "task UPID:pve1:delete failed: ERROR" {
+		t.Fatalf("error = %q", got)
+	}
+}
+
 type fakeBackend struct {
 	nodes   []output.NodeRow
 	vms     map[string]map[int]*fakeGuest
@@ -186,12 +273,16 @@ func (b *fakeBackend) LXC(_ context.Context, node string, vmid int) (Guest, erro
 }
 
 type fakeGuest struct {
-	row          output.GuestRow
-	task         Task
-	cloneID      int
-	cloneName    string
-	cloneOptions CloneOptions
-	configValues map[string]string
+	row            output.GuestRow
+	task           Task
+	cloneID        int
+	cloneName      string
+	cloneOptions   CloneOptions
+	configValues   map[string]string
+	deleted        bool
+	migrateOptions MigrateOptions
+	resizeDisk     string
+	resizeSize     string
 }
 
 func (g *fakeGuest) Row() output.GuestRow {
@@ -232,6 +323,22 @@ func (g *fakeGuest) Clone(_ context.Context, options CloneOptions) (CloneResult,
 
 func (g *fakeGuest) Config(_ context.Context, values map[string]string) (Task, error) {
 	g.configValues = values
+	return g.task, nil
+}
+
+func (g *fakeGuest) Delete(context.Context) (Task, error) {
+	g.deleted = true
+	return g.task, nil
+}
+
+func (g *fakeGuest) Migrate(_ context.Context, options MigrateOptions) (Task, error) {
+	g.migrateOptions = options
+	return g.task, nil
+}
+
+func (g *fakeGuest) Resize(_ context.Context, disk, size string) (Task, error) {
+	g.resizeDisk = disk
+	g.resizeSize = size
 	return g.task, nil
 }
 

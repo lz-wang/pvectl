@@ -31,3 +31,12 @@ func TestNormalizeArgsMovesRepeatedSetFlags(t *testing.T) {
 		t.Fatalf("normalize = %#v, want %#v", got, want)
 	}
 }
+
+func TestNormalizeArgsMovesResizeFlags(t *testing.T) {
+	args := []string{"pvectl", "vm", "resize", "101", "--disk", "scsi0", "--size", "+20G", "--wait"}
+	want := []string{"pvectl", "vm", "resize", "--disk", "scsi0", "--size", "+20G", "--wait", "101"}
+
+	if got := normalizeArgs(args); !reflect.DeepEqual(got, want) {
+		t.Fatalf("normalize = %#v, want %#v", got, want)
+	}
+}

@@ -24,6 +24,9 @@ type Guest interface {
 	Stop(ctx context.Context) (Task, error)
 	Clone(ctx context.Context, options CloneOptions) (CloneResult, Task, error)
 	Config(ctx context.Context, values map[string]string) (Task, error)
+	Delete(ctx context.Context) (Task, error)
+	Migrate(ctx context.Context, options MigrateOptions) (Task, error)
+	Resize(ctx context.Context, disk, size string) (Task, error)
 }
 
 type Task interface {
@@ -47,3 +50,8 @@ type CloneOptions struct {
 }
 
 type CloneResult = output.CloneResult
+
+type MigrateOptions struct {
+	Target string
+	Online bool
+}

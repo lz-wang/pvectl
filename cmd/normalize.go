@@ -27,6 +27,8 @@ var flagsWithValues = map[string]bool{
 	"--description":      true,
 	"--format":           true,
 	"--set":              true,
+	"--disk":             true,
+	"--size":             true,
 	"--endpoint":         true,
 	"--token-id":         true,
 	"--token-secret-env": true,
