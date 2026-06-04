@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/lz-wang/pvectl/internal/output"
 )
@@ -164,6 +165,34 @@ func (s *GuestService) Resize(ctx context.Context, vmid int, node, disk, size st
 	})
 }
 
+func (s *GuestService) ListSnapshots(ctx context.Context, vmid int, node string) ([]output.SnapshotRow, error) {
+	guest, err := s.resolve(ctx, vmid, node)
+	if err != nil {
+		return nil, err
+	}
+	return guest.Snapshots(ctx)
+}
+
+func (s *GuestService) CreateSnapshot(ctx context.Context, vmid int, node, name string) error {
+	name, err := normalizeSnapshotName(name)
+	if err != nil {
+		return err
+	}
+	return s.run(ctx, vmid, node, func(guest Guest) (Task, error) {
+		return guest.CreateSnapshot(ctx, name)
+	})
+}
+
+func (s *GuestService) RollbackSnapshot(ctx context.Context, vmid int, node, name string) error {
+	name, err := normalizeSnapshotName(name)
+	if err != nil {
+		return err
+	}
+	return s.run(ctx, vmid, node, func(guest Guest) (Task, error) {
+		return guest.RollbackSnapshot(ctx, name)
+	})
+}
+
 func (s *GuestService) run(ctx context.Context, vmid int, node string, action func(Guest) (Task, error)) error {
 	guest, err := s.resolve(ctx, vmid, node)
 	if err != nil {
@@ -228,4 +257,12 @@ func (s *GuestService) debug(msg string, args ...any) {
 	if s.verbose && s.logger != nil {
 		s.logger.Debug(msg, args...)
 	}
+}
+
+func normalizeSnapshotName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", fmt.Errorf("snapshot name is required")
+	}
+	return name, nil
 }

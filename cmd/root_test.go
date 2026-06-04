@@ -57,6 +57,23 @@ func TestConfirmDelete(t *testing.T) {
 	}
 }
 
+func TestConfirmRollback(t *testing.T) {
+	var stderr bytes.Buffer
+	if err := confirmRollback(strings.NewReader("before-upgrade\n"), &stderr, "vm", 101, "pve1", "before-upgrade"); err != nil {
+		t.Fatalf("confirm rollback: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "rollback vm 101 on node pve1 to snapshot before-upgrade") {
+		t.Fatalf("prompt = %q", stderr.String())
+	}
+
+	if err := confirmRollback(strings.NewReader("other\n"), &bytes.Buffer{}, "vm", 101, "pve1", "before-upgrade"); err == nil {
+		t.Fatal("expected mismatch to abort")
+	}
+	if err := confirmRollback(strings.NewReader(""), &bytes.Buffer{}, "vm", 101, "pve1", "before-upgrade"); err == nil {
+		t.Fatal("expected EOF to abort")
+	}
+}
+
 func TestVMListCommandUsesDefaultOutputFromContext(t *testing.T) {
 	cfgPath := writeTestConfig(t, "json")
 
@@ -409,6 +426,197 @@ func TestLXCResizeCommandPassesDiskSize(t *testing.T) {
 	}
 }
 
+func TestVMSnapshotListCommandWritesRows(t *testing.T) {
+	cfgPath := writeTestConfig(t, "json")
+	guest := &commandGuest{
+		row: output.GuestRow{Kind: "vm", VMID: 101, Node: "pve1"},
+		snapshots: []output.SnapshotRow{
+			{Kind: "vm", VMID: 101, Node: "pve1", Name: "before-upgrade"},
+		},
+	}
+	backend := &commandBackend{
+		nodes:    []output.NodeRow{{Name: "pve1"}},
+		vmGuests: map[string]map[int]*commandGuest{"pve1": {101: guest}},
+	}
+	var stdout bytes.Buffer
+
+	err := RunWithDependencies([]string{
+		"pvectl", "--config", cfgPath,
+		"vm", "snapshot", "ls", "101",
+	}, "test", testDeps(&stdout, backend))
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !strings.Contains(stdout.String(), `"name": "before-upgrade"`) {
+		t.Fatalf("stdout = %s", stdout.String())
+	}
+}
+
+func TestLXCSnapshotListCommandWritesRows(t *testing.T) {
+	cfgPath := writeTestConfig(t, "json")
+	guest := &commandGuest{
+		row: output.GuestRow{Kind: "lxc", VMID: 201, Node: "pve1"},
+		snapshots: []output.SnapshotRow{
+			{Kind: "lxc", VMID: 201, Node: "pve1", Name: "before-upgrade"},
+		},
+	}
+	backend := &commandBackend{
+		nodes:     []output.NodeRow{{Name: "pve1"}},
+		lxcGuests: map[string]map[int]*commandGuest{"pve1": {201: guest}},
+	}
+	var stdout bytes.Buffer
+
+	err := RunWithDependencies([]string{
+		"pvectl", "--config", cfgPath,
+		"lxc", "snapshot", "ls", "201",
+	}, "test", testDeps(&stdout, backend))
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !strings.Contains(stdout.String(), `"name": "before-upgrade"`) {
+		t.Fatalf("stdout = %s", stdout.String())
+	}
+}
+
+func TestVMSnapshotCreateCommandWaits(t *testing.T) {
+	cfgPath := writeTestConfig(t, "table")
+	task := &commandTask{upid: "UPID:pve1:snapshot"}
+	guest := &commandGuest{
+		row:  output.GuestRow{Kind: "vm", VMID: 101, Node: "pve1"},
+		task: task,
+	}
+	backend := &commandBackend{
+		nodes:    []output.NodeRow{{Name: "pve1"}},
+		vmGuests: map[string]map[int]*commandGuest{"pve1": {101: guest}},
+	}
+
+	err := RunWithDependencies([]string{
+		"pvectl", "--config", cfgPath,
+		"vm", "snapshot", "create", "101", "before-upgrade",
+		"--wait",
+	}, "test", testDeps(&bytes.Buffer{}, backend))
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if guest.createdSnapshot != "before-upgrade" {
+		t.Fatalf("created snapshot = %q", guest.createdSnapshot)
+	}
+	if !task.waited {
+		t.Fatal("expected wait")
+	}
+}
+
+func TestLXCSnapshotCreateCommandWaits(t *testing.T) {
+	cfgPath := writeTestConfig(t, "table")
+	task := &commandTask{upid: "UPID:pve1:lxcsnapshot"}
+	guest := &commandGuest{
+		row:  output.GuestRow{Kind: "lxc", VMID: 201, Node: "pve1"},
+		task: task,
+	}
+	backend := &commandBackend{
+		nodes:     []output.NodeRow{{Name: "pve1"}},
+		lxcGuests: map[string]map[int]*commandGuest{"pve1": {201: guest}},
+	}
+
+	err := RunWithDependencies([]string{
+		"pvectl", "--config", cfgPath,
+		"lxc", "snapshot", "create", "201", "before-upgrade",
+		"--wait",
+	}, "test", testDeps(&bytes.Buffer{}, backend))
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if guest.createdSnapshot != "before-upgrade" {
+		t.Fatalf("created snapshot = %q", guest.createdSnapshot)
+	}
+	if !task.waited {
+		t.Fatal("expected wait")
+	}
+}
+
+func TestVMSnapshotRollbackCommandForceWaits(t *testing.T) {
+	cfgPath := writeTestConfig(t, "table")
+	task := &commandTask{upid: "UPID:pve1:rollback"}
+	guest := &commandGuest{
+		row:  output.GuestRow{Kind: "vm", VMID: 101, Node: "pve1"},
+		task: task,
+	}
+	backend := &commandBackend{
+		nodes:    []output.NodeRow{{Name: "pve1"}},
+		vmGuests: map[string]map[int]*commandGuest{"pve1": {101: guest}},
+	}
+
+	err := RunWithDependencies([]string{
+		"pvectl", "--config", cfgPath,
+		"vm", "snapshot", "rollback", "101", "before-upgrade",
+		"--force",
+		"--wait",
+	}, "test", testDeps(&bytes.Buffer{}, backend))
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if guest.rollbackSnapshot != "before-upgrade" {
+		t.Fatalf("rollback snapshot = %q", guest.rollbackSnapshot)
+	}
+	if !task.waited {
+		t.Fatal("expected wait")
+	}
+}
+
+func TestLXCSnapshotRollbackCommandForceWaits(t *testing.T) {
+	cfgPath := writeTestConfig(t, "table")
+	task := &commandTask{upid: "UPID:pve1:lxcrollback"}
+	guest := &commandGuest{
+		row:  output.GuestRow{Kind: "lxc", VMID: 201, Node: "pve1"},
+		task: task,
+	}
+	backend := &commandBackend{
+		nodes:     []output.NodeRow{{Name: "pve1"}},
+		lxcGuests: map[string]map[int]*commandGuest{"pve1": {201: guest}},
+	}
+
+	err := RunWithDependencies([]string{
+		"pvectl", "--config", cfgPath,
+		"lxc", "snapshot", "rollback", "201", "before-upgrade",
+		"--force",
+		"--wait",
+	}, "test", testDeps(&bytes.Buffer{}, backend))
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if guest.rollbackSnapshot != "before-upgrade" {
+		t.Fatalf("rollback snapshot = %q", guest.rollbackSnapshot)
+	}
+	if !task.waited {
+		t.Fatal("expected wait")
+	}
+}
+
+func TestSnapshotRollbackCommandConfirms(t *testing.T) {
+	cfgPath := writeTestConfig(t, "table")
+	guest := &commandGuest{
+		row:  output.GuestRow{Kind: "vm", VMID: 101, Node: "pve1"},
+		task: &commandTask{upid: "UPID:pve1:rollback"},
+	}
+	backend := &commandBackend{
+		nodes:    []output.NodeRow{{Name: "pve1"}},
+		vmGuests: map[string]map[int]*commandGuest{"pve1": {101: guest}},
+	}
+	deps := testDeps(&bytes.Buffer{}, backend)
+	deps.Stdin = strings.NewReader("before-upgrade\n")
+
+	err := RunWithDependencies([]string{
+		"pvectl", "--config", cfgPath,
+		"vm", "snapshot", "rollback", "101", "before-upgrade",
+	}, "test", deps)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if guest.rollbackSnapshot != "before-upgrade" {
+		t.Fatalf("rollback snapshot = %q", guest.rollbackSnapshot)
+	}
+}
+
 func TestConfigSetContextCommandDoesNotRequireSecretEnv(t *testing.T) {
 	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
 	err := RunWithDependencies([]string{
@@ -469,15 +677,18 @@ func (b *commandBackend) LXC(_ context.Context, node string, vmid int) (pve.Gues
 }
 
 type commandGuest struct {
-	row            output.GuestRow
-	task           pve.Task
-	cloneID        int
-	cloneOptions   pve.CloneOptions
-	configValues   map[string]string
-	deleted        bool
-	migrateOptions pve.MigrateOptions
-	resizeDisk     string
-	resizeSize     string
+	row              output.GuestRow
+	task             pve.Task
+	cloneID          int
+	cloneOptions     pve.CloneOptions
+	configValues     map[string]string
+	deleted          bool
+	migrateOptions   pve.MigrateOptions
+	resizeDisk       string
+	resizeSize       string
+	snapshots        []output.SnapshotRow
+	createdSnapshot  string
+	rollbackSnapshot string
 }
 
 func (g *commandGuest) Row() output.GuestRow {
@@ -531,6 +742,20 @@ func (g *commandGuest) Migrate(_ context.Context, options pve.MigrateOptions) (p
 func (g *commandGuest) Resize(_ context.Context, disk, size string) (pve.Task, error) {
 	g.resizeDisk = disk
 	g.resizeSize = size
+	return g.task, nil
+}
+
+func (g *commandGuest) Snapshots(context.Context) ([]output.SnapshotRow, error) {
+	return g.snapshots, nil
+}
+
+func (g *commandGuest) CreateSnapshot(_ context.Context, name string) (pve.Task, error) {
+	g.createdSnapshot = name
+	return g.task, nil
+}
+
+func (g *commandGuest) RollbackSnapshot(_ context.Context, name string) (pve.Task, error) {
+	g.rollbackSnapshot = name
 	return g.task, nil
 }
 

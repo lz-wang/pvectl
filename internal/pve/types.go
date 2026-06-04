@@ -27,6 +27,9 @@ type Guest interface {
 	Delete(ctx context.Context) (Task, error)
 	Migrate(ctx context.Context, options MigrateOptions) (Task, error)
 	Resize(ctx context.Context, disk, size string) (Task, error)
+	Snapshots(ctx context.Context) ([]output.SnapshotRow, error)
+	CreateSnapshot(ctx context.Context, name string) (Task, error)
+	RollbackSnapshot(ctx context.Context, name string) (Task, error)
 }
 
 type Task interface {

@@ -45,6 +45,9 @@ func normalizeArgs(args []string) []string {
 		return args
 	}
 	leafIndex := resourceIndex + 1
+	if leafIndex < len(args) && args[leafIndex] == "snapshot" && leafIndex+1 < len(args) {
+		leafIndex++
+	}
 	if strings.HasPrefix(args[leafIndex], "-") {
 		return args
 	}

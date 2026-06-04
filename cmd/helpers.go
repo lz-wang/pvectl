@@ -50,6 +50,14 @@ func parseSetFlags(items []string) (map[string]string, error) {
 	return result, nil
 }
 
+func parseSnapshotName(value string) (string, error) {
+	name := strings.TrimSpace(value)
+	if name == "" {
+		return "", fmt.Errorf("snapshot name is required")
+	}
+	return name, nil
+}
+
 func confirmDelete(in io.Reader, out io.Writer, kind string, vmid uint64, node string) error {
 	if in == nil {
 		return fmt.Errorf("delete aborted")
@@ -63,6 +71,23 @@ func confirmDelete(in io.Reader, out io.Writer, kind string, vmid uint64, node s
 	}
 	if strings.TrimSpace(scanner.Text()) != strconv.FormatUint(vmid, 10) {
 		return fmt.Errorf("delete aborted")
+	}
+	return nil
+}
+
+func confirmRollback(in io.Reader, out io.Writer, kind string, vmid uint64, node, snapshot string) error {
+	if in == nil {
+		return fmt.Errorf("rollback aborted")
+	}
+	if out != nil {
+		fmt.Fprintf(out, "rollback %s %d on node %s to snapshot %s? type %q to confirm: ", kind, vmid, node, snapshot, snapshot)
+	}
+	scanner := bufio.NewScanner(in)
+	if !scanner.Scan() {
+		return fmt.Errorf("rollback aborted")
+	}
+	if strings.TrimSpace(scanner.Text()) != snapshot {
+		return fmt.Errorf("rollback aborted")
 	}
 	return nil
 }

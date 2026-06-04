@@ -67,6 +67,31 @@ func TestWriteCloneResultTable(t *testing.T) {
 	}
 }
 
+func TestWriteSnapshotRowsJSON(t *testing.T) {
+	var buf bytes.Buffer
+	rows := []SnapshotRow{{Kind: "vm", VMID: 101, Node: "pve1", Name: "before-upgrade", Snaptime: 1710000000}}
+
+	if err := WriteSnapshotRows(&buf, "json", rows); err != nil {
+		t.Fatalf("write snapshot json: %v", err)
+	}
+	if !strings.Contains(buf.String(), `"name": "before-upgrade"`) {
+		t.Fatalf("json output = %s", buf.String())
+	}
+}
+
+func TestWriteSnapshotRowsTable(t *testing.T) {
+	var buf bytes.Buffer
+	rows := []SnapshotRow{{Kind: "lxc", VMID: 201, Node: "pve1", Name: "before-upgrade", Parent: "base", Snaptime: 1710000000}}
+
+	if err := WriteSnapshotRows(&buf, "table", rows); err != nil {
+		t.Fatalf("write snapshot table: %v", err)
+	}
+	got := buf.String()
+	if !strings.Contains(got, "SNAPTIME") || !strings.Contains(got, "before-upgrade") {
+		t.Fatalf("table output = %s", got)
+	}
+}
+
 func TestFormatUptime(t *testing.T) {
 	if got := FormatUptime(0); got != "-" {
 		t.Fatalf("zero uptime = %q", got)

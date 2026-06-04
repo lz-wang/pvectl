@@ -228,6 +228,108 @@ func TestGuestServiceOperationTaskFailure(t *testing.T) {
 	}
 }
 
+func TestGuestServiceListSnapshots(t *testing.T) {
+	guest := &fakeGuest{
+		row: output.GuestRow{Kind: "vm", VMID: 101, Node: "pve1"},
+		snapshots: []output.SnapshotRow{
+			{Kind: "vm", VMID: 101, Node: "pve1", Name: "before-upgrade"},
+		},
+	}
+	backend := &fakeBackend{
+		nodes: []output.NodeRow{{Name: "pve1"}},
+		vms:   map[string]map[int]*fakeGuest{"pve1": {101: guest}},
+	}
+	svc := NewVMService(backend, TaskRunner{}, nil, false)
+
+	rows, err := svc.ListSnapshots(context.Background(), 101, "")
+	if err != nil {
+		t.Fatalf("list snapshots: %v", err)
+	}
+	if len(rows) != 1 || rows[0].Name != "before-upgrade" {
+		t.Fatalf("snapshots = %#v", rows)
+	}
+}
+
+func TestGuestServiceCreateSnapshotWaits(t *testing.T) {
+	task := &fakeTask{upid: "UPID:pve1:snapshot"}
+	guest := &fakeGuest{
+		row:  output.GuestRow{Kind: "vm", VMID: 101, Node: "pve1"},
+		task: task,
+	}
+	backend := &fakeBackend{
+		nodes: []output.NodeRow{{Name: "pve1"}},
+		vms:   map[string]map[int]*fakeGuest{"pve1": {101: guest}},
+	}
+	svc := NewVMService(backend, TaskRunner{Wait: true}, nil, false)
+
+	err := svc.CreateSnapshot(context.Background(), 101, "", " before-upgrade ")
+	if err != nil {
+		t.Fatalf("create snapshot: %v", err)
+	}
+	if guest.createdSnapshot != "before-upgrade" {
+		t.Fatalf("created snapshot = %q", guest.createdSnapshot)
+	}
+	if !task.waited {
+		t.Fatal("expected create task to be waited")
+	}
+}
+
+func TestGuestServiceRollbackSnapshotWaits(t *testing.T) {
+	task := &fakeTask{upid: "UPID:pve1:rollback"}
+	guest := &fakeGuest{
+		row:  output.GuestRow{Kind: "vm", VMID: 101, Node: "pve1"},
+		task: task,
+	}
+	backend := &fakeBackend{
+		nodes: []output.NodeRow{{Name: "pve1"}},
+		vms:   map[string]map[int]*fakeGuest{"pve1": {101: guest}},
+	}
+	svc := NewVMService(backend, TaskRunner{Wait: true}, nil, false)
+
+	err := svc.RollbackSnapshot(context.Background(), 101, "", "before-upgrade")
+	if err != nil {
+		t.Fatalf("rollback snapshot: %v", err)
+	}
+	if guest.rollbackSnapshot != "before-upgrade" {
+		t.Fatalf("rollback snapshot = %q", guest.rollbackSnapshot)
+	}
+	if !task.waited {
+		t.Fatal("expected rollback task to be waited")
+	}
+}
+
+func TestGuestServiceSnapshotNameRequired(t *testing.T) {
+	svc := NewVMService(&fakeBackend{}, TaskRunner{}, nil, false)
+
+	if err := svc.CreateSnapshot(context.Background(), 101, "", " "); err == nil {
+		t.Fatal("expected empty create snapshot name error")
+	}
+	if err := svc.RollbackSnapshot(context.Background(), 101, "", " "); err == nil {
+		t.Fatal("expected empty rollback snapshot name error")
+	}
+}
+
+func TestGuestServiceSnapshotTaskFailure(t *testing.T) {
+	task := &fakeTask{upid: "UPID:pve1:rollback", failed: true, exitStatus: "ERROR"}
+	guest := &fakeGuest{
+		row:  output.GuestRow{Kind: "vm", VMID: 101, Node: "pve1"},
+		task: task,
+	}
+	backend := &fakeBackend{
+		nodes: []output.NodeRow{{Name: "pve1"}},
+		vms:   map[string]map[int]*fakeGuest{"pve1": {101: guest}},
+	}
+	svc := NewVMService(backend, TaskRunner{Wait: true}, nil, false)
+
+	err := svc.RollbackSnapshot(context.Background(), 101, "", "before-upgrade")
+	if err == nil {
+		t.Fatal("expected task failure")
+	}
+	if got := err.Error(); got != "task UPID:pve1:rollback failed: ERROR" {
+		t.Fatalf("error = %q", got)
+	}
+}
+
 type fakeBackend struct {
 	nodes   []output.NodeRow
 	vms     map[string]map[int]*fakeGuest
@@ -273,16 +375,19 @@ func (b *fakeBackend) LXC(_ context.Context, node string, vmid int) (Guest, erro
 }
 
 type fakeGuest struct {
-	row            output.GuestRow
-	task           Task
-	cloneID        int
-	cloneName      string
-	cloneOptions   CloneOptions
-	configValues   map[string]string
-	deleted        bool
-	migrateOptions MigrateOptions
-	resizeDisk     string
-	resizeSize     string
+	row              output.GuestRow
+	task             Task
+	cloneID          int
+	cloneName        string
+	cloneOptions     CloneOptions
+	configValues     map[string]string
+	deleted          bool
+	migrateOptions   MigrateOptions
+	resizeDisk       string
+	resizeSize       string
+	snapshots        []output.SnapshotRow
+	createdSnapshot  string
+	rollbackSnapshot string
 }
 
 func (g *fakeGuest) Row() output.GuestRow {
@@ -339,6 +444,20 @@ func (g *fakeGuest) Migrate(_ context.Context, options MigrateOptions) (Task, er
 func (g *fakeGuest) Resize(_ context.Context, disk, size string) (Task, error) {
 	g.resizeDisk = disk
 	g.resizeSize = size
+	return g.task, nil
+}
+
+func (g *fakeGuest) Snapshots(context.Context) ([]output.SnapshotRow, error) {
+	return g.snapshots, nil
+}
+
+func (g *fakeGuest) CreateSnapshot(_ context.Context, name string) (Task, error) {
+	g.createdSnapshot = name
+	return g.task, nil
+}
+
+func (g *fakeGuest) RollbackSnapshot(_ context.Context, name string) (Task, error) {
+	g.rollbackSnapshot = name
 	return g.task, nil
 }
 

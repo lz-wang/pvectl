@@ -54,6 +54,18 @@ type CloneResult struct {
 	Task       string `json:"task,omitempty" yaml:"task,omitempty"`
 }
 
+type SnapshotRow struct {
+	Kind        string `json:"kind" yaml:"kind"`
+	VMID        uint64 `json:"vmid" yaml:"vmid"`
+	Node        string `json:"node" yaml:"node"`
+	Name        string `json:"name" yaml:"name"`
+	Description string `json:"description" yaml:"description"`
+	Parent      string `json:"parent" yaml:"parent"`
+	Snaptime    int64  `json:"snaptime" yaml:"snaptime"`
+	VMState     int    `json:"vmstate" yaml:"vmstate"`
+	State       string `json:"state" yaml:"state"`
+}
+
 func ValidateFormat(format string) error {
 	switch strings.ToLower(format) {
 	case FormatTable, FormatJSON, FormatYAML:
@@ -201,6 +213,33 @@ func WriteCloneResult(w io.Writer, format string, result CloneResult) error {
 	})
 }
 
+func WriteSnapshotRows(w io.Writer, format string, rows []SnapshotRow) error {
+	return Write(w, format, rows, func(w io.Writer) error {
+		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+		if _, err := fmt.Fprintln(tw, "KIND\tNAME\tVMID\tNODE\tPARENT\tSNAPTIME\tVMSTATE\tSTATE\tDESCRIPTION"); err != nil {
+			return err
+		}
+		for _, row := range rows {
+			if _, err := fmt.Fprintf(
+				tw,
+				"%s\t%s\t%d\t%s\t%s\t%s\t%d\t%s\t%s\n",
+				row.Kind,
+				row.Name,
+				row.VMID,
+				row.Node,
+				empty(row.Parent),
+				formatUnixTime(row.Snaptime),
+				row.VMState,
+				empty(row.State),
+				empty(row.Description),
+			); err != nil {
+				return err
+			}
+		}
+		return tw.Flush()
+	})
+}
+
 func FormatBytes(n uint64) string {
 	if n == 0 {
 		return "0B"
@@ -247,4 +286,11 @@ func empty(value string) string {
 		return "-"
 	}
 	return value
+}
+
+func formatUnixTime(value int64) string {
+	if value <= 0 {
+		return "-"
+	}
+	return time.Unix(value, 0).UTC().Format(time.RFC3339)
 }

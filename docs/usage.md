@@ -82,6 +82,9 @@ pvectl vm clone 9000 --name app-vm --target pve1 --storage local-lvm --full --wa
 pvectl vm config 101 --set memory=4096 --set cores=4 --wait
 pvectl vm migrate 101 --target pve2 --online --wait
 pvectl vm resize 101 --disk scsi0 --size +20G --wait
+pvectl vm snapshot ls 101
+pvectl vm snapshot create 101 before-upgrade --wait
+pvectl vm snapshot rollback 101 before-upgrade --force --wait
 pvectl vm delete 101 --force
 ```
 
@@ -111,6 +114,9 @@ pvectl lxc clone 900 --hostname app-lxc --target pve1 --storage local-lvm --full
 pvectl lxc config 201 --set memory=2048 --set cores=2 --wait
 pvectl lxc migrate 201 --target pve2 --online --wait
 pvectl lxc resize 201 --disk rootfs --size +10G --wait
+pvectl lxc snapshot ls 201
+pvectl lxc snapshot create 201 before-upgrade --wait
+pvectl lxc snapshot rollback 201 before-upgrade --force --wait
 pvectl lxc delete 201 --force
 ```
 
@@ -130,3 +136,17 @@ pvectl vm delete 101
 
 The prompt requires typing the exact VMID/CTID. The `--force` flag only skips
 this local prompt; it is not passed to the Proxmox LXC delete API.
+
+## Rollback Confirmation
+
+Snapshot rollback commands require typing the exact snapshot name unless
+`--force` is passed:
+
+```bash
+pvectl vm snapshot rollback 101 before-upgrade
+pvectl lxc snapshot rollback 201 before-upgrade
+```
+
+The `--force` flag only skips this local prompt. Snapshot creation and rollback
+are asynchronous PVE tasks, so use `--wait` when scripts need completion
+status.

@@ -216,6 +216,38 @@ func (g vmGuest) Resize(ctx context.Context, disk, size string) (Task, error) {
 	return wrapTask(task), err
 }
 
+func (g vmGuest) Snapshots(ctx context.Context) ([]output.SnapshotRow, error) {
+	snapshots, err := g.vm.Snapshots(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]output.SnapshotRow, 0, len(snapshots))
+	for _, snapshot := range snapshots {
+		rows = append(rows, output.SnapshotRow{
+			Kind:        "vm",
+			VMID:        uint64(g.vm.VMID),
+			Node:        g.vm.Node,
+			Name:        snapshot.Name,
+			Description: snapshot.Description,
+			Parent:      snapshot.Parent,
+			Snaptime:    snapshot.Snaptime,
+			VMState:     snapshot.Vmstate,
+			State:       snapshot.Snapstate,
+		})
+	}
+	return rows, nil
+}
+
+func (g vmGuest) CreateSnapshot(ctx context.Context, name string) (Task, error) {
+	task, err := g.vm.NewSnapshot(ctx, name)
+	return wrapTask(task), err
+}
+
+func (g vmGuest) RollbackSnapshot(ctx context.Context, name string) (Task, error) {
+	task, err := g.vm.Snapshot(name).Rollback(ctx)
+	return wrapTask(task), err
+}
+
 type lxcGuest struct {
 	ct *proxmox.Container
 }
@@ -293,6 +325,36 @@ func (g lxcGuest) Migrate(ctx context.Context, options MigrateOptions) (Task, er
 
 func (g lxcGuest) Resize(ctx context.Context, disk, size string) (Task, error) {
 	task, err := g.ct.Resize(ctx, disk, size)
+	return wrapTask(task), err
+}
+
+func (g lxcGuest) Snapshots(ctx context.Context) ([]output.SnapshotRow, error) {
+	snapshots, err := g.ct.Snapshots(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]output.SnapshotRow, 0, len(snapshots))
+	for _, snapshot := range snapshots {
+		rows = append(rows, output.SnapshotRow{
+			Kind:        "lxc",
+			VMID:        uint64(g.ct.VMID),
+			Node:        g.ct.Node,
+			Name:        snapshot.Name,
+			Description: snapshot.Description,
+			Parent:      snapshot.Parent,
+			Snaptime:    snapshot.SnapshotCreationTime,
+		})
+	}
+	return rows, nil
+}
+
+func (g lxcGuest) CreateSnapshot(ctx context.Context, name string) (Task, error) {
+	task, err := g.ct.NewSnapshot(ctx, name)
+	return wrapTask(task), err
+}
+
+func (g lxcGuest) RollbackSnapshot(ctx context.Context, name string) (Task, error) {
+	task, err := g.ct.Snapshot(name).Rollback(ctx, false)
 	return wrapTask(task), err
 }
 

@@ -40,3 +40,12 @@ func TestNormalizeArgsMovesResizeFlags(t *testing.T) {
 		t.Fatalf("normalize = %#v, want %#v", got, want)
 	}
 }
+
+func TestNormalizeArgsMovesNestedSnapshotFlags(t *testing.T) {
+	args := []string{"pvectl", "vm", "snapshot", "create", "101", "before-upgrade", "--wait"}
+	want := []string{"pvectl", "vm", "snapshot", "create", "--wait", "101", "before-upgrade"}
+
+	if got := normalizeArgs(args); !reflect.DeepEqual(got, want) {
+		t.Fatalf("normalize = %#v, want %#v", got, want)
+	}
+}

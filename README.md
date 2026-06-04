@@ -15,6 +15,7 @@ commands resource-oriented instead of exposing raw API paths.
 - Clone VM/QEMU and LXC guests from templates.
 - Mutate guest config with generic `--set key=value` options.
 - Delete, migrate, and resize VM/QEMU and LXC guests.
+- List, create, and rollback VM/QEMU and LXC snapshots.
 - Optionally wait for async PVE tasks.
 - Render `table`, `json`, or `yaml` output.
 
@@ -59,6 +60,9 @@ pvectl vm clone 9000 --newid 101 --name app-vm --target pve1 --wait
 pvectl vm config 101 --set memory=4096 --set cores=4 --wait
 pvectl vm migrate 101 --target pve2 --online --wait
 pvectl vm resize 101 --disk scsi0 --size +20G --wait
+pvectl vm snapshot ls 101
+pvectl vm snapshot create 101 before-upgrade --wait
+pvectl vm snapshot rollback 101 before-upgrade --force --wait
 pvectl vm delete 101 --force
 
 pvectl lxc ls --node pve1
@@ -68,6 +72,9 @@ pvectl lxc clone 900 --newid 201 --hostname app-lxc --target pve1 --wait
 pvectl lxc config 201 --set memory=2048 --set cores=2 --wait
 pvectl lxc migrate 201 --target pve2 --online --wait
 pvectl lxc resize 201 --disk rootfs --size +10G --wait
+pvectl lxc snapshot ls 201
+pvectl lxc snapshot create 201 before-upgrade --wait
+pvectl lxc snapshot rollback 201 before-upgrade --force --wait
 pvectl lxc delete 201 --force
 ```
 
