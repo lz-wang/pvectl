@@ -40,6 +40,22 @@ func TestWriteGuestRowsTable(t *testing.T) {
 	if !strings.Contains(got, "VMID") || !strings.Contains(got, "1.0GiB") {
 		t.Fatalf("table output = %s", got)
 	}
+	if strings.Contains(got, "KIND") {
+		t.Fatalf("regular guest table should not include KIND: %s", got)
+	}
+}
+
+func TestWriteGuestRowsWithKindTable(t *testing.T) {
+	var buf bytes.Buffer
+	rows := []GuestRow{{Kind: "lxc", VMID: 200, Name: "app", Node: "pve1", Status: "running", MaxMem: 2 * 1024 * 1024 * 1024}}
+
+	if err := WriteGuestRowsWithKind(&buf, "table", rows); err != nil {
+		t.Fatalf("write table: %v", err)
+	}
+	got := buf.String()
+	if !strings.Contains(got, "KIND") || !strings.Contains(got, "lxc") || !strings.Contains(got, "2.0GiB") {
+		t.Fatalf("table output = %s", got)
+	}
 }
 
 func TestWriteCloneResultJSON(t *testing.T) {

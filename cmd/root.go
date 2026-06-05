@@ -95,6 +95,7 @@ func NewAppWithDependencies(version string, deps Dependencies) *cli.App {
 		Commands: []*cli.Command{
 			newConfigCommand(),
 			newNodeCommand(deps),
+			newGuestAggregateCommand(deps),
 			newVMCommand(deps),
 			newLXCCommand(deps),
 		},

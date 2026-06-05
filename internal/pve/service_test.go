@@ -379,21 +379,29 @@ func TestGuestServiceSnapshotTaskFailure(t *testing.T) {
 }
 
 type fakeBackend struct {
-	nodes   []output.NodeRow
-	vms     map[string]map[int]*fakeGuest
-	lxcs    map[string]map[int]*fakeGuest
-	vmRows  map[string][]output.GuestRow
-	lxcRows map[string][]output.GuestRow
-	vmErrs  map[string]error
-	lxcErrs map[string]error
-	vmCalls int
+	nodes        []output.NodeRow
+	vms          map[string]map[int]*fakeGuest
+	lxcs         map[string]map[int]*fakeGuest
+	vmRows       map[string][]output.GuestRow
+	lxcRows      map[string][]output.GuestRow
+	vmErrs       map[string]error
+	lxcErrs      map[string]error
+	vmCalls      int
+	nodeCalls    int
+	vmListCalls  map[string]int
+	lxcListCalls map[string]int
 }
 
 func (b *fakeBackend) Nodes(context.Context) ([]output.NodeRow, error) {
+	b.nodeCalls++
 	return b.nodes, nil
 }
 
 func (b *fakeBackend) VMs(_ context.Context, node string) ([]output.GuestRow, error) {
+	if b.vmListCalls == nil {
+		b.vmListCalls = make(map[string]int)
+	}
+	b.vmListCalls[node]++
 	if err := b.vmErrs[node]; err != nil {
 		return nil, err
 	}
@@ -409,6 +417,10 @@ func (b *fakeBackend) VM(_ context.Context, node string, vmid int) (Guest, error
 }
 
 func (b *fakeBackend) LXCs(_ context.Context, node string) ([]output.GuestRow, error) {
+	if b.lxcListCalls == nil {
+		b.lxcListCalls = make(map[string]int)
+	}
+	b.lxcListCalls[node]++
 	if err := b.lxcErrs[node]; err != nil {
 		return nil, err
 	}

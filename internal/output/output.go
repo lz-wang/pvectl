@@ -164,6 +164,35 @@ func WriteGuestRows(w io.Writer, format string, rows []GuestRow) error {
 	})
 }
 
+func WriteGuestRowsWithKind(w io.Writer, format string, rows []GuestRow) error {
+	return Write(w, format, rows, func(w io.Writer) error {
+		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+		if _, err := fmt.Fprintln(tw, "KIND\tVMID\tNAME\tNODE\tSTATUS\tCPUS\tMEM\tMAXMEM\tMAXDISK\tUPTIME\tTAGS"); err != nil {
+			return err
+		}
+		for _, row := range rows {
+			if _, err := fmt.Fprintf(
+				tw,
+				"%s\t%d\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\n",
+				row.Kind,
+				row.VMID,
+				empty(row.Name),
+				row.Node,
+				row.Status,
+				row.CPUs,
+				FormatBytes(row.Mem),
+				FormatBytes(row.MaxMem),
+				FormatBytes(row.MaxDisk),
+				FormatUptime(row.Uptime),
+				empty(row.Tags),
+			); err != nil {
+				return err
+			}
+		}
+		return tw.Flush()
+	})
+}
+
 func WriteGuestDetail(w io.Writer, format string, row GuestRow) error {
 	return Write(w, format, row, func(w io.Writer) error {
 		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)

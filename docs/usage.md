@@ -48,6 +48,28 @@ The token secret is read from the named environment variable at runtime.
 pvectl node ls
 ```
 
+### Guest Aggregate View
+
+`guest` is a read-only aggregate view across VM/QEMU and LXC guests.
+
+```bash
+pvectl guest ls
+pvectl guest ls --node pve1
+pvectl guest ls --type vm
+pvectl guest ls --type lxc
+pvectl guest ls --status running
+pvectl guest get 100
+pvectl guest get 100 --type vm
+pvectl guest get 200 --type lxc
+```
+
+Use `guest` for inventory and inspection. Use `vm` and `lxc` commands for
+lifecycle and maintenance operations.
+
+`guest ls` defaults to `--type all`. `guest get` defaults to `--type auto` and
+searches both VM/QEMU and LXC guests. If both a VM and an LXC exist with the
+same ID, specify `--type vm` or `--type lxc`.
+
 ### VM/QEMU
 
 ```bash
@@ -180,6 +202,7 @@ Supported output formats are `table`, `json`, and `yaml`.
 
 ```bash
 pvectl node ls -o table
+pvectl guest ls -o json
 pvectl vm get 100 -o json
 pvectl lxc get 200 -o yaml
 ```

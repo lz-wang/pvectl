@@ -42,6 +42,10 @@ pvectl config use-context home
 ```bash
 pvectl node ls
 
+pvectl guest ls
+pvectl guest get 100
+pvectl guest ls --status running
+
 pvectl vm ls
 pvectl vm get 100
 pvectl vm start 100 --wait
@@ -57,10 +61,13 @@ pvectl lxc reboot 200 --wait
 pvectl lxc stop 200
 ```
 
+Use `guest` for read-only aggregate views across VM/QEMU and LXC guests. Use
+`vm` and `lxc` for lifecycle operations.
+
 Default output is `table` for humans. Use `-o json` for scripts:
 
 ```bash
-pvectl vm get 100 -o json
+pvectl guest get 100 -o json
 ```
 
 See [docs/usage.md](docs/usage.md) for clone, config, resize, migrate,

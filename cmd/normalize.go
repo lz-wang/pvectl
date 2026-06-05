@@ -5,6 +5,7 @@ import "strings"
 var commandRoots = map[string]bool{
 	"config": true,
 	"node":   true,
+	"guest":  true,
 	"vm":     true,
 	"lxc":    true,
 }
@@ -17,6 +18,7 @@ var flagsWithValues = map[string]bool{
 	"--timeout":          true,
 	"--wait-timeout":     true,
 	"--node":             true,
+	"--type":             true,
 	"--newid":            true,
 	"--name":             true,
 	"--hostname":         true,
