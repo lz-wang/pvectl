@@ -51,6 +51,10 @@ Keep the tool small and predictable. Do not turn it into:
   scripting details in `docs/usage.md`.
 - Keep dangerous commands such as delete and snapshot rollback separate from
   daily examples.
+- Before creating or pushing a release tag, update `CHANGELOG.md` with the new
+  version entry.
+- GitHub Release notes should be based on the matching version section in
+  `CHANGELOG.md`.
 
 ## Security Rules
 
