@@ -51,7 +51,7 @@ func NewAppWithDependencies(version string, deps Dependencies) *cli.App {
 
 	app := &cli.App{
 		Name:                   "pvectl",
-		Usage:                  "A Proxmox VE CLI for small-cluster operations",
+		Usage:                  "Personal HomeLab Proxmox VE CLI",
 		Version:                version,
 		UseShortOptionHandling: true,
 		Writer:                 deps.Stdout,
