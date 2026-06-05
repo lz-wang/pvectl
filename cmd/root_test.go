@@ -699,11 +699,16 @@ func TestConfigSetContextCommandDoesNotRequireSecretEnv(t *testing.T) {
 }
 
 type commandBackend struct {
-	nodes     []output.NodeRow
-	vms       map[string][]output.GuestRow
-	lxcs      map[string][]output.GuestRow
-	vmGuests  map[string]map[int]*commandGuest
-	lxcGuests map[string]map[int]*commandGuest
+	nodes         []output.NodeRow
+	vms           map[string][]output.GuestRow
+	lxcs          map[string][]output.GuestRow
+	vmGuests      map[string]map[int]*commandGuest
+	lxcGuests     map[string]map[int]*commandGuest
+	backups       map[string]map[string][]output.BackupRow
+	backupTask    pve.Task
+	backupNode    string
+	backupOptions pve.BackupOptions
+	backupCalls   int
 }
 
 func (b *commandBackend) Nodes(context.Context) ([]output.NodeRow, error) {
@@ -730,6 +735,20 @@ func (b *commandBackend) LXC(_ context.Context, node string, vmid int) (pve.Gues
 		return guest, nil
 	}
 	return nil, pve.ErrNotFound
+}
+
+func (b *commandBackend) Backups(_ context.Context, node, storage string) ([]output.BackupRow, error) {
+	if b.backups == nil {
+		return nil, nil
+	}
+	return b.backups[node][storage], nil
+}
+
+func (b *commandBackend) BackupGuest(_ context.Context, node string, options pve.BackupOptions) (pve.Task, error) {
+	b.backupCalls++
+	b.backupNode = node
+	b.backupOptions = options
+	return b.backupTask, nil
 }
 
 type commandGuest struct {

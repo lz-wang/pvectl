@@ -31,6 +31,7 @@ func newGuestCommand(kind, usage string, deps Dependencies) *cli.Command {
 			guestMigrateCommand(kind, deps),
 			guestResizeCommand(kind, deps),
 			guestSnapshotCommand(kind, deps),
+			guestBackupCommand(kind, deps),
 		},
 	}
 }

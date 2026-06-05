@@ -67,3 +67,21 @@ func TestNormalizeArgsMovesNestedSnapshotFlags(t *testing.T) {
 		t.Fatalf("normalize = %#v, want %#v", got, want)
 	}
 }
+
+func TestNormalizeArgsMovesBackupListFlags(t *testing.T) {
+	args := []string{"pvectl", "backup", "ls", "--node", "pve1", "--storage", "backup", "--kind", "vm", "--latest"}
+	want := []string{"pvectl", "backup", "ls", "--node", "pve1", "--storage", "backup", "--kind", "vm", "--latest"}
+
+	if got := normalizeArgs(args); !reflect.DeepEqual(got, want) {
+		t.Fatalf("normalize = %#v, want %#v", got, want)
+	}
+}
+
+func TestNormalizeArgsMovesGuestBackupFlags(t *testing.T) {
+	args := []string{"pvectl", "vm", "backup", "100", "--storage", "backup", "--mode", "stop", "--compress", "none", "--protected", "1", "--wait"}
+	want := []string{"pvectl", "vm", "backup", "--storage", "backup", "--mode", "stop", "--compress", "none", "--protected", "1", "--wait", "100"}
+
+	if got := normalizeArgs(args); !reflect.DeepEqual(got, want) {
+		t.Fatalf("normalize = %#v, want %#v", got, want)
+	}
+}

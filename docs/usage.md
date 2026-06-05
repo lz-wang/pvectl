@@ -102,6 +102,56 @@ pvectl lxc stop 200
 When `--node` is omitted, `pvectl` traverses all nodes returned by the cluster
 and resolves the CTID automatically.
 
+## Backup Commands
+
+Backup commands are intentionally lightweight. They list backup files on a
+specific node/storage and create one-off guest backups.
+
+### List Backups
+
+```bash
+pvectl backup ls --node pve1 --storage backup
+pvectl backup ls --node pve1 --storage backup --vmid 100
+pvectl backup ls --node pve1 --storage backup --kind vm
+pvectl backup ls --node pve1 --storage backup --kind lxc
+pvectl backup ls --node pve1 --storage backup --latest
+pvectl backup ls --node pve1 --storage backup -o json
+```
+
+`backup ls` requires both `--node` and `--storage`. Supported backup kinds are
+`all`, `vm`, and `lxc`. Use `--latest` to keep only the newest backup per
+guest.
+
+### Create One-off Guest Backups
+
+```bash
+pvectl vm backup 100 --storage backup --mode snapshot --wait
+pvectl lxc backup 200 --storage backup --mode snapshot --wait
+```
+
+Common options:
+
+```bash
+pvectl vm backup 100 \
+  --storage backup \
+  --mode snapshot \
+  --compress zstd \
+  --notes-template "{{guestname}}" \
+  --bwlimit 102400 \
+  --protected 1 \
+  --wait
+```
+
+Supported modes are `snapshot`, `suspend`, and `stop`. Supported compression
+values are `zstd`, `lzo`, `gzip`, and `none`.
+
+When `--node` is omitted, `pvectl` resolves the VMID/CTID automatically before
+triggering the backup. Backup results are written to stdout and include the
+task ID; task IDs and wait progress are also written to stderr.
+
+`pvectl` does not manage scheduled backup jobs, restore, prune, backup
+deletion, PBS datastores, or PBS verification.
+
 ## Maintenance Commands
 
 ### Clone

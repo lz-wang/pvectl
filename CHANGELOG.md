@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.7 - 2026-06-05
+
+### Added
+
+- Add `pvectl backup ls` for listing backup files on a specified node and
+  storage.
+- Add `pvectl vm backup <vmid>` for one-off VM/QEMU backups.
+- Add `pvectl lxc backup <vmid>` for one-off LXC backups.
+- Add backup output schemas for backup rows and backup task results.
+- Add backup filters for `--vmid`, `--kind`, and `--latest`.
+
+### Notes
+
+- Backup support is intentionally limited to listing backup files and creating
+  one-off guest backups.
+- No backup deletion, restore, prune, scheduled backup job management, or PBS
+  management is included.
+
 ## v0.6 - 2026-06-05
 
 ### Added

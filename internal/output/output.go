@@ -66,6 +66,31 @@ type SnapshotRow struct {
 	State       string `json:"state" yaml:"state"`
 }
 
+type BackupRow struct {
+	Node        string `json:"node" yaml:"node"`
+	Storage     string `json:"storage" yaml:"storage"`
+	Kind        string `json:"kind" yaml:"kind"`
+	VMID        uint64 `json:"vmid" yaml:"vmid"`
+	VolID       string `json:"volid" yaml:"volid"`
+	Format      string `json:"format" yaml:"format"`
+	Size        uint64 `json:"size" yaml:"size"`
+	Used        uint64 `json:"used,omitempty" yaml:"used,omitempty"`
+	CTime       uint64 `json:"ctime" yaml:"ctime"`
+	Protected   string `json:"protected,omitempty" yaml:"protected,omitempty"`
+	Encrypted   string `json:"encrypted,omitempty" yaml:"encrypted,omitempty"`
+	VerifyState string `json:"verify_state,omitempty" yaml:"verify_state,omitempty"`
+	Notes       string `json:"notes,omitempty" yaml:"notes,omitempty"`
+}
+
+type BackupResult struct {
+	Kind    string `json:"kind" yaml:"kind"`
+	VMID    uint64 `json:"vmid" yaml:"vmid"`
+	Node    string `json:"node" yaml:"node"`
+	Storage string `json:"storage" yaml:"storage"`
+	Mode    string `json:"mode" yaml:"mode"`
+	Task    string `json:"task,omitempty" yaml:"task,omitempty"`
+}
+
 func ValidateFormat(format string) error {
 	switch strings.ToLower(format) {
 	case FormatTable, FormatJSON, FormatYAML:
@@ -264,6 +289,56 @@ func WriteSnapshotRows(w io.Writer, format string, rows []SnapshotRow) error {
 			); err != nil {
 				return err
 			}
+		}
+		return tw.Flush()
+	})
+}
+
+func WriteBackupRows(w io.Writer, format string, rows []BackupRow) error {
+	return Write(w, format, rows, func(w io.Writer) error {
+		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+		if _, err := fmt.Fprintln(tw, "NODE\tSTORAGE\tKIND\tVMID\tFORMAT\tSIZE\tCTIME\tPROTECTED\tVERIFY\tVOLID"); err != nil {
+			return err
+		}
+		for _, row := range rows {
+			if _, err := fmt.Fprintf(
+				tw,
+				"%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\n",
+				row.Node,
+				row.Storage,
+				row.Kind,
+				row.VMID,
+				empty(row.Format),
+				FormatBytes(row.Size),
+				formatUnixTime(int64(row.CTime)),
+				empty(row.Protected),
+				empty(row.VerifyState),
+				row.VolID,
+			); err != nil {
+				return err
+			}
+		}
+		return tw.Flush()
+	})
+}
+
+func WriteBackupResult(w io.Writer, format string, result BackupResult) error {
+	return Write(w, format, result, func(w io.Writer) error {
+		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+		if _, err := fmt.Fprintln(tw, "KIND\tVMID\tNODE\tSTORAGE\tMODE\tTASK"); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(
+			tw,
+			"%s\t%d\t%s\t%s\t%s\t%s\n",
+			result.Kind,
+			result.VMID,
+			result.Node,
+			result.Storage,
+			result.Mode,
+			empty(result.Task),
+		); err != nil {
+			return err
 		}
 		return tw.Flush()
 	})

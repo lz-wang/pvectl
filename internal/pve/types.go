@@ -15,6 +15,8 @@ type Backend interface {
 	VM(ctx context.Context, node string, vmid int) (Guest, error)
 	LXCs(ctx context.Context, node string) ([]output.GuestRow, error)
 	LXC(ctx context.Context, node string, vmid int) (Guest, error)
+	Backups(ctx context.Context, node, storage string) ([]output.BackupRow, error)
+	BackupGuest(ctx context.Context, node string, options BackupOptions) (Task, error)
 }
 
 type Guest interface {
@@ -58,4 +60,15 @@ type CloneResult = output.CloneResult
 type MigrateOptions struct {
 	Target string
 	Online bool
+}
+
+type BackupOptions struct {
+	Kind          string
+	VMID          int
+	Storage       string
+	Mode          string
+	Compress      string
+	NotesTemplate string
+	BwLimit       uint
+	Protected     string
 }

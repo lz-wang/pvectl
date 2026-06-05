@@ -108,6 +108,75 @@ func TestWriteSnapshotRowsTable(t *testing.T) {
 	}
 }
 
+func TestWriteBackupRowsJSONOmitsEmptyOptionalFields(t *testing.T) {
+	var buf bytes.Buffer
+	rows := []BackupRow{{
+		Node:    "pve1",
+		Storage: "backup",
+		Kind:    "vm",
+		VMID:    100,
+		VolID:   "backup:backup/vzdump-qemu-100.vma.zst",
+		Format:  "vma.zst",
+		Size:    1024,
+		CTime:   1710000000,
+	}}
+
+	if err := WriteBackupRows(&buf, "json", rows); err != nil {
+		t.Fatalf("write backup json: %v", err)
+	}
+	got := buf.String()
+	if !strings.Contains(got, `"volid": "backup:backup/vzdump-qemu-100.vma.zst"`) {
+		t.Fatalf("json output = %s", got)
+	}
+	if strings.Contains(got, "protected") || strings.Contains(got, "verify_state") {
+		t.Fatalf("expected optional fields to be omitted: %s", got)
+	}
+}
+
+func TestWriteBackupRowsTable(t *testing.T) {
+	var buf bytes.Buffer
+	rows := []BackupRow{{
+		Node:        "pve1",
+		Storage:     "backup",
+		Kind:        "lxc",
+		VMID:        200,
+		VolID:       "backup:backup/vzdump-lxc-200.tar.zst",
+		Format:      "tar.zst",
+		Size:        2 * 1024 * 1024 * 1024,
+		CTime:       1710000000,
+		Protected:   "1",
+		VerifyState: "ok",
+	}}
+
+	if err := WriteBackupRows(&buf, "table", rows); err != nil {
+		t.Fatalf("write backup table: %v", err)
+	}
+	got := buf.String()
+	if !strings.Contains(got, "NODE") || !strings.Contains(got, "2.0GiB") || !strings.Contains(got, "VERIFY") {
+		t.Fatalf("table output = %s", got)
+	}
+}
+
+func TestWriteBackupResultTableAndJSON(t *testing.T) {
+	var table bytes.Buffer
+	result := BackupResult{Kind: "vm", VMID: 100, Node: "pve1", Storage: "backup", Mode: "snapshot", Task: "UPID:pve1:backup"}
+
+	if err := WriteBackupResult(&table, "table", result); err != nil {
+		t.Fatalf("write backup result table: %v", err)
+	}
+	if got := table.String(); !strings.Contains(got, "TASK") || !strings.Contains(got, "UPID:pve1:backup") {
+		t.Fatalf("table output = %s", got)
+	}
+
+	var jsonBuf bytes.Buffer
+	if err := WriteBackupResult(&jsonBuf, "json", result); err != nil {
+		t.Fatalf("write backup result json: %v", err)
+	}
+	if !strings.Contains(jsonBuf.String(), `"task": "UPID:pve1:backup"`) {
+		t.Fatalf("json output = %s", jsonBuf.String())
+	}
+}
+
 func TestFormatUptime(t *testing.T) {
 	if got := FormatUptime(0); got != "-" {
 		t.Fatalf("zero uptime = %q", got)

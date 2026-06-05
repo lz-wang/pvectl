@@ -46,11 +46,14 @@ pvectl guest ls
 pvectl guest get 100
 pvectl guest ls --status running
 
+pvectl backup ls --node pve1 --storage backup
+
 pvectl vm ls
 pvectl vm get 100
 pvectl vm start 100 --wait
 pvectl vm shutdown 100 --wait
 pvectl vm reboot 100 --wait
+pvectl vm backup 100 --storage backup --mode snapshot --wait
 pvectl vm stop 100
 
 pvectl lxc ls
@@ -58,11 +61,15 @@ pvectl lxc get 200
 pvectl lxc start 200 --wait
 pvectl lxc shutdown 200 --wait
 pvectl lxc reboot 200 --wait
+pvectl lxc backup 200 --storage backup --mode snapshot --wait
 pvectl lxc stop 200
 ```
 
 Use `guest` for read-only aggregate views across VM/QEMU and LXC guests. Use
 `vm` and `lxc` for lifecycle operations.
+
+Backup commands are intentionally limited to listing backup files and creating
+one-off guest backups.
 
 Default output is `table` for humans. Use `-o json` for scripts:
 

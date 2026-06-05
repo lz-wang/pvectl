@@ -6,12 +6,15 @@
 - LXC daily operations
 - read-only guest aggregate views combining VM/QEMU and LXC
 - clone/config/resize/migrate/snapshot for HomeLab maintenance
+- read-only backup listing
+- one-off VM/LXC backup trigger
 
 ## Candidate future features
 
-- backup list
-- backup trigger
 - shell-friendly filters
+- backup restore metadata inspection
+- storage read-only inventory
+- config doctor
 
 ## Non-goals
 

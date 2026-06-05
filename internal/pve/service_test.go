@@ -379,17 +379,23 @@ func TestGuestServiceSnapshotTaskFailure(t *testing.T) {
 }
 
 type fakeBackend struct {
-	nodes        []output.NodeRow
-	vms          map[string]map[int]*fakeGuest
-	lxcs         map[string]map[int]*fakeGuest
-	vmRows       map[string][]output.GuestRow
-	lxcRows      map[string][]output.GuestRow
-	vmErrs       map[string]error
-	lxcErrs      map[string]error
-	vmCalls      int
-	nodeCalls    int
-	vmListCalls  map[string]int
-	lxcListCalls map[string]int
+	nodes         []output.NodeRow
+	vms           map[string]map[int]*fakeGuest
+	lxcs          map[string]map[int]*fakeGuest
+	vmRows        map[string][]output.GuestRow
+	lxcRows       map[string][]output.GuestRow
+	backupRows    map[string]map[string][]output.BackupRow
+	backupTask    Task
+	backupNode    string
+	backupOptions BackupOptions
+	vmErrs        map[string]error
+	lxcErrs       map[string]error
+	vmCalls       int
+	lxcCalls      int
+	nodeCalls     int
+	vmListCalls   map[string]int
+	lxcListCalls  map[string]int
+	backupCalls   int
 }
 
 func (b *fakeBackend) Nodes(context.Context) ([]output.NodeRow, error) {
@@ -428,10 +434,25 @@ func (b *fakeBackend) LXCs(_ context.Context, node string) ([]output.GuestRow, e
 }
 
 func (b *fakeBackend) LXC(_ context.Context, node string, vmid int) (Guest, error) {
+	b.lxcCalls++
 	if guest := b.lxcs[node][vmid]; guest != nil {
 		return guest, nil
 	}
 	return nil, ErrNotFound
+}
+
+func (b *fakeBackend) Backups(_ context.Context, node, storage string) ([]output.BackupRow, error) {
+	if b.backupRows == nil {
+		return nil, nil
+	}
+	return b.backupRows[node][storage], nil
+}
+
+func (b *fakeBackend) BackupGuest(_ context.Context, node string, options BackupOptions) (Task, error) {
+	b.backupCalls++
+	b.backupNode = node
+	b.backupOptions = options
+	return b.backupTask, nil
 }
 
 type fakeGuest struct {
