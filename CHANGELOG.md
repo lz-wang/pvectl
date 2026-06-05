@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.8 - 2026-06-05
+
+### Added
+
+- Add `pvectl storage ls` for read-only node storage inventory.
+- Add `pvectl storage get <storage> --node <node>` for detailed storage status.
+- Add `pvectl storage content ls` for read-only storage content inventory.
+- Add storage output schemas for storage status and generic storage content.
+- Add storage filters for content type, storage type, active/enabled status,
+  and VMID.
+
+### Notes
+
+- Storage support is intentionally read-only.
+- No storage creation, update, deletion, upload, download, pruning, or PBS
+  management is included.
+
 ## v0.7 - 2026-06-05
 
 ### Added

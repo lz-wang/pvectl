@@ -48,6 +48,9 @@ pvectl guest ls --status running
 
 pvectl backup ls --node pve1 --storage backup
 
+pvectl storage ls
+pvectl storage content ls --node pve1 --storage local
+
 pvectl vm ls
 pvectl vm get 100
 pvectl vm start 100 --wait
@@ -70,6 +73,8 @@ Use `guest` for read-only aggregate views across VM/QEMU and LXC guests. Use
 
 Backup commands are intentionally limited to listing backup files and creating
 one-off guest backups.
+
+Storage commands are read-only inventory helpers.
 
 Default output is `table` for humans. Use `-o json` for scripts:
 

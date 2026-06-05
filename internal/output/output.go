@@ -91,6 +91,36 @@ type BackupResult struct {
 	Task    string `json:"task,omitempty" yaml:"task,omitempty"`
 }
 
+type StorageRow struct {
+	Node         string  `json:"node" yaml:"node"`
+	Storage      string  `json:"storage" yaml:"storage"`
+	Type         string  `json:"type" yaml:"type"`
+	Active       bool    `json:"active" yaml:"active"`
+	Enabled      bool    `json:"enabled" yaml:"enabled"`
+	Shared       bool    `json:"shared" yaml:"shared"`
+	Content      string  `json:"content" yaml:"content"`
+	Used         uint64  `json:"used" yaml:"used"`
+	Avail        uint64  `json:"avail" yaml:"avail"`
+	Total        uint64  `json:"total" yaml:"total"`
+	UsedFraction float64 `json:"used_fraction" yaml:"used_fraction"`
+}
+
+type StorageContentRow struct {
+	Node        string `json:"node" yaml:"node"`
+	Storage     string `json:"storage" yaml:"storage"`
+	Content     string `json:"content" yaml:"content"`
+	VMID        uint64 `json:"vmid,omitempty" yaml:"vmid,omitempty"`
+	VolID       string `json:"volid" yaml:"volid"`
+	Format      string `json:"format,omitempty" yaml:"format,omitempty"`
+	Size        uint64 `json:"size" yaml:"size"`
+	Used        uint64 `json:"used,omitempty" yaml:"used,omitempty"`
+	CTime       uint64 `json:"ctime,omitempty" yaml:"ctime,omitempty"`
+	Protected   string `json:"protected,omitempty" yaml:"protected,omitempty"`
+	Encrypted   string `json:"encrypted,omitempty" yaml:"encrypted,omitempty"`
+	VerifyState string `json:"verify_state,omitempty" yaml:"verify_state,omitempty"`
+	Notes       string `json:"notes,omitempty" yaml:"notes,omitempty"`
+}
+
 func ValidateFormat(format string) error {
 	switch strings.ToLower(format) {
 	case FormatTable, FormatJSON, FormatYAML:
@@ -344,6 +374,90 @@ func WriteBackupResult(w io.Writer, format string, result BackupResult) error {
 	})
 }
 
+func WriteStorageRows(w io.Writer, format string, rows []StorageRow) error {
+	return Write(w, format, rows, func(w io.Writer) error {
+		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+		if _, err := fmt.Fprintln(tw, "NODE\tSTORAGE\tTYPE\tACTIVE\tENABLED\tSHARED\tCONTENT\tUSED\tAVAIL\tTOTAL\tUSED%"); err != nil {
+			return err
+		}
+		for _, row := range rows {
+			if _, err := fmt.Fprintf(
+				tw,
+				"%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%.1f\n",
+				row.Node,
+				row.Storage,
+				empty(row.Type),
+				formatBool(row.Active),
+				formatBool(row.Enabled),
+				formatBool(row.Shared),
+				empty(row.Content),
+				FormatBytes(row.Used),
+				FormatBytes(row.Avail),
+				FormatBytes(row.Total),
+				row.UsedFraction*100,
+			); err != nil {
+				return err
+			}
+		}
+		return tw.Flush()
+	})
+}
+
+func WriteStorageDetail(w io.Writer, format string, row StorageRow) error {
+	return Write(w, format, row, func(w io.Writer) error {
+		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+		lines := [][2]string{
+			{"Node", row.Node},
+			{"Storage", row.Storage},
+			{"Type", empty(row.Type)},
+			{"Active", formatBool(row.Active)},
+			{"Enabled", formatBool(row.Enabled)},
+			{"Shared", formatBool(row.Shared)},
+			{"Content", empty(row.Content)},
+			{"Used", FormatBytes(row.Used)},
+			{"Avail", FormatBytes(row.Avail)},
+			{"Total", FormatBytes(row.Total)},
+			{"Used%", fmt.Sprintf("%.1f", row.UsedFraction*100)},
+		}
+		for _, line := range lines {
+			if _, err := fmt.Fprintf(tw, "%s:\t%s\n", line[0], line[1]); err != nil {
+				return err
+			}
+		}
+		return tw.Flush()
+	})
+}
+
+func WriteStorageContentRows(w io.Writer, format string, rows []StorageContentRow) error {
+	return Write(w, format, rows, func(w io.Writer) error {
+		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+		if _, err := fmt.Fprintln(tw, "NODE\tSTORAGE\tCONTENT\tVMID\tFORMAT\tSIZE\tUSED\tCTIME\tPROTECTED\tENCRYPTED\tVERIFY\tVOLID"); err != nil {
+			return err
+		}
+		for _, row := range rows {
+			if _, err := fmt.Fprintf(
+				tw,
+				"%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+				row.Node,
+				row.Storage,
+				empty(row.Content),
+				formatOptionalUint(row.VMID),
+				empty(row.Format),
+				FormatBytes(row.Size),
+				formatOptionalBytes(row.Used),
+				formatUnixTime(int64(row.CTime)),
+				empty(row.Protected),
+				empty(row.Encrypted),
+				empty(row.VerifyState),
+				row.VolID,
+			); err != nil {
+				return err
+			}
+		}
+		return tw.Flush()
+	})
+}
+
 func FormatBytes(n uint64) string {
 	if n == 0 {
 		return "0B"
@@ -390,6 +504,27 @@ func empty(value string) string {
 		return "-"
 	}
 	return value
+}
+
+func formatBool(value bool) string {
+	if value {
+		return "yes"
+	}
+	return "no"
+}
+
+func formatOptionalBytes(value uint64) string {
+	if value == 0 {
+		return "-"
+	}
+	return FormatBytes(value)
+}
+
+func formatOptionalUint(value uint64) string {
+	if value == 0 {
+		return "-"
+	}
+	return fmt.Sprint(value)
 }
 
 func formatUnixTime(value int64) string {

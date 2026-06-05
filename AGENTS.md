@@ -38,6 +38,8 @@ Keep the tool small and predictable. Do not turn it into:
   databases, or other platform-style layers.
 - Keep `guest` commands read-only unless a future task explicitly changes the
   scope.
+- Keep `storage` commands read-only unless a future task explicitly changes the
+  scope.
 - Keep dangerous operations explicit and locally confirmed unless the existing
   `--force` behavior already applies.
 - Keep command output script-friendly: command results go to stdout; task IDs

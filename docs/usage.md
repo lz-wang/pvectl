@@ -152,6 +152,57 @@ task ID; task IDs and wait progress are also written to stderr.
 `pvectl` does not manage scheduled backup jobs, restore, prune, backup
 deletion, PBS datastores, or PBS verification.
 
+## Storage Commands
+
+Storage commands are read-only inventory helpers for storage status and generic
+storage content.
+
+### List Storages
+
+```bash
+pvectl storage ls
+pvectl storage ls --node pve1
+pvectl storage ls --content backup
+pvectl storage ls --type dir
+pvectl storage ls --active
+pvectl storage ls --enabled
+pvectl storage ls -o json
+```
+
+When `--node` is omitted, `pvectl` traverses all nodes returned by the cluster
+and lists storage status on each node. Use `--content` for a single content
+capability such as `backup`, `iso`, `images`, or `vztmpl`. Use `--type` for a
+single storage type such as `dir`, `lvmthin`, `nfs`, or `pbs`.
+
+### Show Storage Status
+
+```bash
+pvectl storage get local --node pve1
+pvectl storage get backup --node pve1 -o json
+```
+
+`storage get` requires `--node` because the same storage name may be visible on
+multiple nodes.
+
+### List Storage Content
+
+```bash
+pvectl storage content ls --node pve1 --storage local
+pvectl storage content ls --node pve1 --storage local --content iso
+pvectl storage content ls --node pve1 --storage backup --content backup
+pvectl storage content ls --node pve1 --storage local-lvm --content images
+pvectl storage content ls --node pve1 --storage backup --vmid 100
+pvectl storage content ls --node pve1 --storage local -o json
+```
+
+`storage content ls` shows generic storage contents such as ISO images, LXC
+templates, backup files, VM disks, and container root disks. If you only care
+about backup files, prefer `backup ls`; it uses backup-specific fields and
+supports `--kind` and `--latest`.
+
+`pvectl` does not create, update, delete, upload, download, prune, or otherwise
+mutate storages or storage content. It also does not manage PBS datastores.
+
 ## Maintenance Commands
 
 ### Clone

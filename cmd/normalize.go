@@ -3,12 +3,13 @@ package cmd
 import "strings"
 
 var commandRoots = map[string]bool{
-	"config": true,
-	"node":   true,
-	"guest":  true,
-	"backup": true,
-	"vm":     true,
-	"lxc":    true,
+	"config":  true,
+	"node":    true,
+	"guest":   true,
+	"backup":  true,
+	"storage": true,
+	"vm":      true,
+	"lxc":     true,
 }
 
 var flagsWithValues = map[string]bool{
@@ -19,6 +20,7 @@ var flagsWithValues = map[string]bool{
 	"--timeout":          true,
 	"--wait-timeout":     true,
 	"--node":             true,
+	"--content":          true,
 	"--type":             true,
 	"--kind":             true,
 	"--vmid":             true,
@@ -55,7 +57,7 @@ func normalizeArgs(args []string) []string {
 		return args
 	}
 	leafIndex := resourceIndex + 1
-	if leafIndex < len(args) && args[leafIndex] == "snapshot" && leafIndex+1 < len(args) {
+	if leafIndex < len(args) && (args[leafIndex] == "snapshot" || args[leafIndex] == "content") && leafIndex+1 < len(args) {
 		leafIndex++
 	}
 	if strings.HasPrefix(args[leafIndex], "-") {

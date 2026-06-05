@@ -177,6 +177,82 @@ func TestWriteBackupResultTableAndJSON(t *testing.T) {
 	}
 }
 
+func TestWriteStorageRowsTable(t *testing.T) {
+	var buf bytes.Buffer
+	rows := []StorageRow{{
+		Node:         "pve1",
+		Storage:      "local",
+		Type:         "dir",
+		Active:       true,
+		Enabled:      true,
+		Content:      "iso,backup",
+		Used:         1024 * 1024 * 1024,
+		Avail:        3 * 1024 * 1024 * 1024,
+		Total:        4 * 1024 * 1024 * 1024,
+		UsedFraction: 0.25,
+	}}
+
+	if err := WriteStorageRows(&buf, "table", rows); err != nil {
+		t.Fatalf("write storage table: %v", err)
+	}
+	got := buf.String()
+	if !strings.Contains(got, "USED%") || !strings.Contains(got, "yes") || !strings.Contains(got, "1.0GiB") || !strings.Contains(got, "25.0") {
+		t.Fatalf("table output = %s", got)
+	}
+}
+
+func TestWriteStorageDetailTableAndJSON(t *testing.T) {
+	row := StorageRow{Node: "pve1", Storage: "local-lvm", Type: "lvmthin", Active: true, Enabled: true, Shared: false, UsedFraction: 0.5}
+
+	var table bytes.Buffer
+	if err := WriteStorageDetail(&table, "table", row); err != nil {
+		t.Fatalf("write storage detail table: %v", err)
+	}
+	if got := table.String(); !strings.Contains(got, "Storage:") || !strings.Contains(got, "local-lvm") || !strings.Contains(got, "Used%") {
+		t.Fatalf("table output = %s", got)
+	}
+
+	var jsonBuf bytes.Buffer
+	if err := WriteStorageDetail(&jsonBuf, "json", row); err != nil {
+		t.Fatalf("write storage detail json: %v", err)
+	}
+	if !strings.Contains(jsonBuf.String(), `"used_fraction": 0.5`) {
+		t.Fatalf("json output = %s", jsonBuf.String())
+	}
+}
+
+func TestWriteStorageContentRowsTableAndJSON(t *testing.T) {
+	rows := []StorageContentRow{{
+		Node:        "pve1",
+		Storage:     "backup",
+		Content:     "backup",
+		VMID:        100,
+		VolID:       "backup:backup/vzdump-qemu-100.vma.zst",
+		Format:      "vma.zst",
+		Size:        2 * 1024 * 1024 * 1024,
+		CTime:       1710000000,
+		Protected:   "1",
+		VerifyState: "ok",
+	}}
+
+	var table bytes.Buffer
+	if err := WriteStorageContentRows(&table, "table", rows); err != nil {
+		t.Fatalf("write storage content table: %v", err)
+	}
+	got := table.String()
+	if !strings.Contains(got, "CONTENT") || !strings.Contains(got, "2.0GiB") || !strings.Contains(got, "VERIFY") {
+		t.Fatalf("table output = %s", got)
+	}
+
+	var jsonBuf bytes.Buffer
+	if err := WriteStorageContentRows(&jsonBuf, "json", rows); err != nil {
+		t.Fatalf("write storage content json: %v", err)
+	}
+	if !strings.Contains(jsonBuf.String(), `"volid": "backup:backup/vzdump-qemu-100.vma.zst"`) {
+		t.Fatalf("json output = %s", jsonBuf.String())
+	}
+}
+
 func TestFormatUptime(t *testing.T) {
 	if got := FormatUptime(0); got != "-" {
 		t.Fatalf("zero uptime = %q", got)

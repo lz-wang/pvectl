@@ -68,3 +68,22 @@ func lxcRow(ct *proxmox.Container) output.GuestRow {
 		Tags:    ct.Tags,
 	}
 }
+
+func storageRow(storage *proxmox.Storage) output.StorageRow {
+	if storage == nil {
+		return output.StorageRow{}
+	}
+	return output.StorageRow{
+		Node:         storage.Node,
+		Storage:      storage.Name,
+		Type:         storage.Type,
+		Active:       storage.Active == 1,
+		Enabled:      storage.Enabled == 1,
+		Shared:       storage.Shared == 1,
+		Content:      storage.Content,
+		Used:         storage.Used,
+		Avail:        storage.Avail,
+		Total:        storage.Total,
+		UsedFraction: storage.UsedFraction,
+	}
+}

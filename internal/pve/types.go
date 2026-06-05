@@ -17,6 +17,9 @@ type Backend interface {
 	LXC(ctx context.Context, node string, vmid int) (Guest, error)
 	Backups(ctx context.Context, node, storage string) ([]output.BackupRow, error)
 	BackupGuest(ctx context.Context, node string, options BackupOptions) (Task, error)
+	Storages(ctx context.Context, node string) ([]output.StorageRow, error)
+	Storage(ctx context.Context, node, storage string) (output.StorageRow, error)
+	StorageContents(ctx context.Context, node, storage string) ([]output.StorageContentRow, error)
 }
 
 type Guest interface {

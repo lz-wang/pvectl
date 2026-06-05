@@ -379,23 +379,28 @@ func TestGuestServiceSnapshotTaskFailure(t *testing.T) {
 }
 
 type fakeBackend struct {
-	nodes         []output.NodeRow
-	vms           map[string]map[int]*fakeGuest
-	lxcs          map[string]map[int]*fakeGuest
-	vmRows        map[string][]output.GuestRow
-	lxcRows       map[string][]output.GuestRow
-	backupRows    map[string]map[string][]output.BackupRow
-	backupTask    Task
-	backupNode    string
-	backupOptions BackupOptions
-	vmErrs        map[string]error
-	lxcErrs       map[string]error
-	vmCalls       int
-	lxcCalls      int
-	nodeCalls     int
-	vmListCalls   map[string]int
-	lxcListCalls  map[string]int
-	backupCalls   int
+	nodes          []output.NodeRow
+	vms            map[string]map[int]*fakeGuest
+	lxcs           map[string]map[int]*fakeGuest
+	vmRows         map[string][]output.GuestRow
+	lxcRows        map[string][]output.GuestRow
+	backupRows     map[string]map[string][]output.BackupRow
+	storageRows    map[string][]output.StorageRow
+	storageByName  map[string]map[string]output.StorageRow
+	storageContent map[string]map[string][]output.StorageContentRow
+	backupTask     Task
+	backupNode     string
+	backupOptions  BackupOptions
+	vmErrs         map[string]error
+	lxcErrs        map[string]error
+	storageErrs    map[string]error
+	vmCalls        int
+	lxcCalls       int
+	nodeCalls      int
+	vmListCalls    map[string]int
+	lxcListCalls   map[string]int
+	backupCalls    int
+	storageCalls   map[string]int
 }
 
 func (b *fakeBackend) Nodes(context.Context) ([]output.NodeRow, error) {
@@ -453,6 +458,35 @@ func (b *fakeBackend) BackupGuest(_ context.Context, node string, options Backup
 	b.backupNode = node
 	b.backupOptions = options
 	return b.backupTask, nil
+}
+
+func (b *fakeBackend) Storages(_ context.Context, node string) ([]output.StorageRow, error) {
+	if b.storageCalls == nil {
+		b.storageCalls = make(map[string]int)
+	}
+	b.storageCalls[node]++
+	if err := b.storageErrs[node]; err != nil {
+		return nil, err
+	}
+	return b.storageRows[node], nil
+}
+
+func (b *fakeBackend) Storage(_ context.Context, node, storage string) (output.StorageRow, error) {
+	if b.storageByName == nil {
+		return output.StorageRow{}, ErrNotFound
+	}
+	row, ok := b.storageByName[node][storage]
+	if !ok {
+		return output.StorageRow{}, ErrNotFound
+	}
+	return row, nil
+}
+
+func (b *fakeBackend) StorageContents(_ context.Context, node, storage string) ([]output.StorageContentRow, error) {
+	if b.storageContent == nil {
+		return nil, nil
+	}
+	return b.storageContent[node][storage], nil
 }
 
 type fakeGuest struct {

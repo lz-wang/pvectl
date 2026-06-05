@@ -699,16 +699,19 @@ func TestConfigSetContextCommandDoesNotRequireSecretEnv(t *testing.T) {
 }
 
 type commandBackend struct {
-	nodes         []output.NodeRow
-	vms           map[string][]output.GuestRow
-	lxcs          map[string][]output.GuestRow
-	vmGuests      map[string]map[int]*commandGuest
-	lxcGuests     map[string]map[int]*commandGuest
-	backups       map[string]map[string][]output.BackupRow
-	backupTask    pve.Task
-	backupNode    string
-	backupOptions pve.BackupOptions
-	backupCalls   int
+	nodes          []output.NodeRow
+	vms            map[string][]output.GuestRow
+	lxcs           map[string][]output.GuestRow
+	vmGuests       map[string]map[int]*commandGuest
+	lxcGuests      map[string]map[int]*commandGuest
+	backups        map[string]map[string][]output.BackupRow
+	storages       map[string][]output.StorageRow
+	storageByName  map[string]map[string]output.StorageRow
+	storageContent map[string]map[string][]output.StorageContentRow
+	backupTask     pve.Task
+	backupNode     string
+	backupOptions  pve.BackupOptions
+	backupCalls    int
 }
 
 func (b *commandBackend) Nodes(context.Context) ([]output.NodeRow, error) {
@@ -749,6 +752,31 @@ func (b *commandBackend) BackupGuest(_ context.Context, node string, options pve
 	b.backupNode = node
 	b.backupOptions = options
 	return b.backupTask, nil
+}
+
+func (b *commandBackend) Storages(_ context.Context, node string) ([]output.StorageRow, error) {
+	if b.storages == nil {
+		return nil, nil
+	}
+	return b.storages[node], nil
+}
+
+func (b *commandBackend) Storage(_ context.Context, node, storage string) (output.StorageRow, error) {
+	if b.storageByName == nil {
+		return output.StorageRow{}, pve.ErrNotFound
+	}
+	row, ok := b.storageByName[node][storage]
+	if !ok {
+		return output.StorageRow{}, pve.ErrNotFound
+	}
+	return row, nil
+}
+
+func (b *commandBackend) StorageContents(_ context.Context, node, storage string) ([]output.StorageContentRow, error) {
+	if b.storageContent == nil {
+		return nil, nil
+	}
+	return b.storageContent[node][storage], nil
 }
 
 type commandGuest struct {
