@@ -1,0 +1,141 @@
+name: Build Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build and upload"
+        required: true
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.TAG }}
+      release_url: ${{ steps.version.outputs.RELEASE_URL }}
+    steps:
+      - name: Resolve release tag
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+            RELEASE_URL="${{ github.event.release.html_url }}"
+          else
+            TAG="${{ inputs.tag }}"
+            RELEASE_URL="${{ github.server_url }}/${{ github.repository }}/releases/tag/${TAG}"
+          fi
+
+          if [ -z "$TAG" ]; then
+            echo "Release tag is required" >&2
+            exit 1
+          fi
+
+          echo "TAG=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "RELEASE_URL=${RELEASE_URL}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.version.outputs.TAG }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+
+      - name: Run checks
+        run: make check
+
+      - name: Run tests
+        run: make test
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: ""
+          - goos: linux
+            goarch: arm64
+            suffix: ""
+          - goos: darwin
+            goarch: amd64
+            suffix: ""
+          - goos: darwin
+            goarch: arm64
+            suffix: ""
+          - goos: windows
+            goarch: amd64
+            suffix: ".exe"
+          - goos: windows
+            goarch: arm64
+            suffix: ".exe"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.test.outputs.tag }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          VERSION: ${{ needs.test.outputs.tag }}
+        run: |
+          output="pvectl-${VERSION}-${GOOS}-${GOARCH}${{ matrix.suffix }}"
+          CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o "${output}" ./main.go
+          sha256sum "${output}" > "${output}.sha256"
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.test.outputs.tag }}
+        run: |
+          gh release upload "$TAG" \
+            "pvectl-${TAG}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}" \
+            "pvectl-${TAG}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}.sha256" \
+            --clobber
+
+  notify:
+    runs-on: ubuntu-latest
+    needs: [test, build]
+    if: always()
+    steps:
+      - name: Notify via Pushover
+        env:
+          PUSHOVER_TOKEN: ${{ secrets.PUSHOVER_TOKEN }}
+          PUSHOVER_USER: ${{ secrets.PUSHOVER_USER }}
+        run: |
+          MESSAGE=$(cat <<'EOF'
+          <b>pvectl 构建通知</b>
+          <u>测试结果</u>: ${{ needs.test.result == 'success' && '<font color="#00aa00"><b>success</b></font>' || format('<font color="#cc0000"><b>{0}</b></font>', needs.test.result) }}
+          <u>构建结果</u>: ${{ needs.build.result == 'success' && '<font color="#00aa00"><b>success</b></font>' || format('<font color="#cc0000"><b>{0}</b></font>', needs.build.result) }}
+          <u>版本</u>: <font color="#0000ff">${{ needs.test.outputs.tag || github.event.release.tag_name || inputs.tag }}</font>
+          <u>触发人</u>: <i>${{ github.actor }}</i>
+          <a href="${{ needs.test.outputs.release_url || github.event.release.html_url || format('{0}/{1}/releases/tag/{2}', github.server_url, github.repository, inputs.tag) }}">查看 Release</a>
+          <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">查看运行详情</a>
+          EOF
+          )
+          curl -fsS https://api.pushover.net/1/messages.json \
+            --data-urlencode "token=${PUSHOVER_TOKEN}" \
+            --data-urlencode "user=${PUSHOVER_USER}" \
+            --data-urlencode "title=pvectl 构建通知" \
+            --data-urlencode "html=1" \
+            --data-urlencode "message=${MESSAGE}"
