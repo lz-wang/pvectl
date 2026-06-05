@@ -1,17 +1,16 @@
-name: Build Release
+name: Build
 
 on:
-  release:
-    types: [published]
+  push:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to build and upload"
-        required: true
+        description: "Optional tag to build and publish"
+        required: false
         type: string
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.release.tag_name || inputs.tag }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.tag || '' }}
   cancel-in-progress: true
 
 permissions:
@@ -21,31 +20,48 @@ jobs:
   test:
     runs-on: ubuntu-latest
     outputs:
-      tag: ${{ steps.version.outputs.TAG }}
+      version: ${{ steps.version.outputs.VERSION }}
+      checkout_ref: ${{ steps.version.outputs.CHECKOUT_REF }}
+      is_release: ${{ steps.version.outputs.IS_RELEASE }}
+      release_tag: ${{ steps.version.outputs.RELEASE_TAG }}
       release_url: ${{ steps.version.outputs.RELEASE_URL }}
     steps:
-      - name: Resolve release tag
+      - name: Resolve build version
         id: version
         run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            TAG="${{ github.event.release.tag_name }}"
-            RELEASE_URL="${{ github.event.release.html_url }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.tag }}" ]; then
+            VERSION="${{ inputs.tag }}"
+            CHECKOUT_REF="${{ inputs.tag }}"
+            IS_RELEASE="true"
+            RELEASE_TAG="${{ inputs.tag }}"
+            RELEASE_URL="${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ inputs.tag }}"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            VERSION="${{ github.ref_name }}"
+            CHECKOUT_REF="${{ github.ref_name }}"
+            IS_RELEASE="true"
+            RELEASE_TAG="${{ github.ref_name }}"
+            RELEASE_URL="${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
           else
-            TAG="${{ inputs.tag }}"
-            RELEASE_URL="${{ github.server_url }}/${{ github.repository }}/releases/tag/${TAG}"
+            COMMIT=$(echo "${{ github.sha }}" | cut -c1-7)
+            DATE=$(TZ=Asia/Shanghai date +%Y%m%d)
+            VERSION="v${DATE}-${COMMIT}"
+            CHECKOUT_REF="${{ github.sha }}"
+            IS_RELEASE="false"
+            RELEASE_TAG=""
+            RELEASE_URL=""
           fi
 
-          if [ -z "$TAG" ]; then
-            echo "Release tag is required" >&2
-            exit 1
-          fi
-
-          echo "TAG=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "RELEASE_URL=${RELEASE_URL}" >> "$GITHUB_OUTPUT"
+          {
+            echo "VERSION=${VERSION}"
+            echo "CHECKOUT_REF=${CHECKOUT_REF}"
+            echo "IS_RELEASE=${IS_RELEASE}"
+            echo "RELEASE_TAG=${RELEASE_TAG}"
+            echo "RELEASE_URL=${RELEASE_URL}"
+          } >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v6
         with:
-          ref: ${{ steps.version.outputs.TAG }}
+          ref: ${{ steps.version.outputs.CHECKOUT_REF }}
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -86,7 +102,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ needs.test.outputs.tag }}
+          ref: ${{ needs.test.outputs.checkout_ref }}
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -97,25 +113,45 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          VERSION: ${{ needs.test.outputs.tag }}
+          VERSION: ${{ needs.test.outputs.version }}
         run: |
           output="pvectl-${VERSION}-${GOOS}-${GOARCH}${{ matrix.suffix }}"
           CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o "${output}" ./main.go
           sha256sum "${output}" > "${output}.sha256"
 
-      - name: Upload release assets
+      - name: Upload release artifact
+        if: ${{ needs.test.outputs.is_release == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: pvectl-${{ needs.test.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            pvectl-${{ needs.test.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}
+            pvectl-${{ needs.test.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}.sha256
+          if-no-files-found: error
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: [test, build]
+    if: ${{ needs.test.outputs.is_release == 'true' }}
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Create release and upload assets
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.test.outputs.tag }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.test.outputs.release_tag }}
         run: |
-          gh release upload "$TAG" \
-            "pvectl-${TAG}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}" \
-            "pvectl-${TAG}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }}.sha256" \
-            --clobber
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --notes "Release $TAG"
+          gh release upload "$TAG" release-assets/* --clobber
 
   notify:
     runs-on: ubuntu-latest
-    needs: [test, build]
+    needs: [test, build, publish]
     if: always()
     steps:
       - name: Notify via Pushover
@@ -127,9 +163,10 @@ jobs:
           <b>pvectl 构建通知</b>
           <u>测试结果</u>: ${{ needs.test.result == 'success' && '<font color="#00aa00"><b>success</b></font>' || format('<font color="#cc0000"><b>{0}</b></font>', needs.test.result) }}
           <u>构建结果</u>: ${{ needs.build.result == 'success' && '<font color="#00aa00"><b>success</b></font>' || format('<font color="#cc0000"><b>{0}</b></font>', needs.build.result) }}
-          <u>版本</u>: <font color="#0000ff">${{ needs.test.outputs.tag || github.event.release.tag_name || inputs.tag }}</font>
+          <u>发布结果</u>: ${{ needs.publish.result == 'success' && '<font color="#00aa00"><b>success</b></font>' || format('<font color="#666666"><b>{0}</b></font>', needs.publish.result) }}
+          <u>版本</u>: <font color="#0000ff">${{ needs.test.outputs.version || github.ref_name || inputs.tag }}</font>
           <u>触发人</u>: <i>${{ github.actor }}</i>
-          <a href="${{ needs.test.outputs.release_url || github.event.release.html_url || format('{0}/{1}/releases/tag/{2}', github.server_url, github.repository, inputs.tag) }}">查看 Release</a>
+          ${{ needs.test.outputs.release_url && format('<a href="{0}">查看 Release</a>', needs.test.outputs.release_url) || '' }}
           <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">查看运行详情</a>
           EOF
           )
