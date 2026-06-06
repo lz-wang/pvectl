@@ -5,20 +5,19 @@ operations.
 
 ## Configuration
 
-For a typical HomeLab setup, create one context and make it current:
+For a typical HomeLab setup, initialize one default context and run a
+diagnostic check:
 
 ```bash
 export PVECTL_HOME_TOKEN_SECRET="your-token-secret"
 
-pvectl config set-context home \
+pvectl config init \
   --endpoint https://pve.lan:8006/api2/json \
   --token-id automation@pve!pvectl \
   --token-secret-env PVECTL_HOME_TOKEN_SECRET \
-  --insecure \
-  --timeout 30s \
-  --default-output table
+  --insecure
 
-pvectl config use-context home
+pvectl doctor
 pvectl config current-context
 pvectl config view
 ```
@@ -39,6 +38,42 @@ contexts:
 
 The token secret is read from the named environment variable at runtime.
 `pvectl` does not write token secrets to disk.
+
+Use `config set-context` and `config use-context` when you need to manage more
+than one context:
+
+```bash
+pvectl config set-context lab \
+  --endpoint https://pve-lab.lan:8006/api2/json \
+  --token-id automation@pve!pvectl \
+  --token-secret-env PVECTL_LAB_TOKEN_SECRET \
+  --timeout 30s \
+  --default-output table
+
+pvectl config use-context lab
+```
+
+`config init` defaults to context name `home`, timeout `30s`, default output
+`table`, and sets the initialized context as current. Use `--name`,
+`--overwrite`, or `--no-use` when you need different initialization behavior.
+
+## Diagnostics
+
+```bash
+pvectl doctor
+pvectl doctor --offline
+pvectl doctor --node pve1
+pvectl doctor -o json
+```
+
+`doctor` checks the config path, config file, YAML parsing, selected context,
+required context fields, token secret environment variable, timeout,
+default output, endpoint shape, Proxmox API connectivity, and node listing
+permission. It never prints token secret values.
+
+Use `--offline` to skip Proxmox API calls. Use `--node` to verify a specific
+node exists during online checks. Doctor rows are written to stdout and support
+the same `table`, `json`, and `yaml` output formats as resource commands.
 
 ## Daily Commands
 

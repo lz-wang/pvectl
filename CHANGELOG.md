@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.9 - 2026-06-06
+
+### Added
+
+- Add `pvectl config init` for one-command HomeLab context initialization.
+- Add `pvectl doctor` for local config and Proxmox API connectivity
+  diagnostics.
+- Add doctor output rows for table, JSON, and YAML output.
+- Add offline doctor mode with `--offline`.
+- Add optional node existence checks with `--node`.
+
+### Notes
+
+- Doctor output never prints token secret values.
+- Doctor checks only `/nodes` for online API validation.
+- No new Proxmox mutation APIs, server mode, database, RBAC, audit, restore,
+  prune, PBS management, or storage write support is included.
+
 ## v0.8 - 2026-06-05
 
 ### Added

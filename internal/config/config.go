@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -23,6 +24,13 @@ type Context struct {
 	InsecureSkipVerify bool   `yaml:"insecure_skip_verify,omitempty"`
 	Timeout            string `yaml:"timeout,omitempty"`
 	DefaultOutput      string `yaml:"default_output,omitempty"`
+}
+
+type InitOptions struct {
+	Name      string
+	Context   Context
+	Overwrite bool
+	Use       bool
 }
 
 func Empty() *Config {
@@ -123,18 +131,32 @@ func (c *Config) SetContext(name string, ctx Context) error {
 	if name == "" {
 		return errors.New("context name is required")
 	}
-	if ctx.Endpoint == "" {
-		return errors.New("endpoint is required")
-	}
-	if ctx.TokenID == "" {
-		return errors.New("token-id is required")
-	}
-	if ctx.TokenSecretEnv == "" {
-		return errors.New("token-secret-env is required")
+	if err := validateContext(ctx); err != nil {
+		return err
 	}
 	c.ensure()
 	c.Contexts[name] = ctx
 	if c.CurrentContext == "" {
+		c.CurrentContext = name
+	}
+	return nil
+}
+
+func (c *Config) InitContext(options InitOptions) error {
+	name := strings.TrimSpace(options.Name)
+	if name == "" {
+		return errors.New("context name is required")
+	}
+	if err := validateContext(options.Context); err != nil {
+		return err
+	}
+
+	c.ensure()
+	if _, exists := c.Contexts[name]; exists && !options.Overwrite {
+		return fmt.Errorf("context %q already exists; use --overwrite to replace it", name)
+	}
+	c.Contexts[name] = options.Context
+	if options.Use {
 		c.CurrentContext = name
 	}
 	return nil
@@ -176,6 +198,19 @@ func ResolveTokenSecret(ctx Context) (string, error) {
 		return "", fmt.Errorf("environment variable %s is empty", ctx.TokenSecretEnv)
 	}
 	return secret, nil
+}
+
+func validateContext(ctx Context) error {
+	if ctx.Endpoint == "" {
+		return errors.New("endpoint is required")
+	}
+	if ctx.TokenID == "" {
+		return errors.New("token-id is required")
+	}
+	if ctx.TokenSecretEnv == "" {
+		return errors.New("token-secret-env is required")
+	}
+	return nil
 }
 
 func (c *Config) ensure() {

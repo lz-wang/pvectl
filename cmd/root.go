@@ -94,6 +94,7 @@ func NewAppWithDependencies(version string, deps Dependencies) *cli.App {
 		},
 		Commands: []*cli.Command{
 			newConfigCommand(),
+			newDoctorCommand(deps),
 			newNodeCommand(deps),
 			newGuestAggregateCommand(deps),
 			newBackupCommand(deps),
@@ -231,6 +232,15 @@ func durationFlag(c *cli.Context, name string) time.Duration {
 		}
 	}
 	return c.Duration(name)
+}
+
+func flagIsSet(c *cli.Context, name string) bool {
+	for _, ctx := range c.Lineage() {
+		if ctx.IsSet(name) {
+			return true
+		}
+	}
+	return false
 }
 
 func commonNodeFlag() []cli.Flag {

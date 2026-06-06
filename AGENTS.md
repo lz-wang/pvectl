@@ -44,6 +44,9 @@ Keep the tool small and predictable. Do not turn it into:
   `--force` behavior already applies.
 - Keep command output script-friendly: command results go to stdout; task IDs
   and wait progress go to stderr.
+- Doctor commands must not print token secrets.
+- Doctor should prefer structured diagnostic rows over early returns so users
+  can see multiple failures in one run.
 
 ## Documentation Rules
 

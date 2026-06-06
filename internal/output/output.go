@@ -18,6 +18,15 @@ const (
 	FormatYAML  = "yaml"
 )
 
+type DoctorStatus string
+
+const (
+	DoctorStatusOK   DoctorStatus = "ok"
+	DoctorStatusWarn DoctorStatus = "warn"
+	DoctorStatusFail DoctorStatus = "fail"
+	DoctorStatusSkip DoctorStatus = "skip"
+)
+
 type NodeRow struct {
 	Name    string  `json:"name" yaml:"name"`
 	Status  string  `json:"status" yaml:"status"`
@@ -121,6 +130,12 @@ type StorageContentRow struct {
 	Notes       string `json:"notes,omitempty" yaml:"notes,omitempty"`
 }
 
+type DoctorRow struct {
+	Check   string       `json:"check" yaml:"check"`
+	Status  DoctorStatus `json:"status" yaml:"status"`
+	Message string       `json:"message" yaml:"message"`
+}
+
 func ValidateFormat(format string) error {
 	switch strings.ToLower(format) {
 	case FormatTable, FormatJSON, FormatYAML:
@@ -184,6 +199,21 @@ func WriteNodeRows(w io.Writer, format string, rows []NodeRow) error {
 				FormatBytes(row.MaxDisk),
 				FormatUptime(row.Uptime),
 			); err != nil {
+				return err
+			}
+		}
+		return tw.Flush()
+	})
+}
+
+func WriteDoctorRows(w io.Writer, format string, rows []DoctorRow) error {
+	return Write(w, format, rows, func(w io.Writer) error {
+		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+		if _, err := fmt.Fprintln(tw, "CHECK\tSTATUS\tMESSAGE"); err != nil {
+			return err
+		}
+		for _, row := range rows {
+			if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\n", row.Check, row.Status, row.Message); err != nil {
 				return err
 			}
 		}

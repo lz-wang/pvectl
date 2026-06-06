@@ -18,24 +18,24 @@ The binary is written to `bin/pvectl`.
 ## Configure
 
 For a typical HomeLab setup, one default context is enough. Create an API token
-in Proxmox VE, export the token secret, then save a context:
+in Proxmox VE, export the token secret, initialize the context, then run a
+diagnostic check:
 
 ```bash
 export PVECTL_HOME_TOKEN_SECRET="your-token-secret"
 
-pvectl config set-context home \
+pvectl config init \
   --endpoint https://pve.lan:8006/api2/json \
   --token-id automation@pve!pvectl \
   --token-secret-env PVECTL_HOME_TOKEN_SECRET \
-  --insecure \
-  --timeout 30s \
-  --default-output table
+  --insecure
 
-pvectl config use-context home
+pvectl doctor
 ```
 
 `pvectl` stores only the environment variable name in
 `~/.config/pvectl/config.yaml`; it does not write token secrets to disk.
+Use `pvectl config set-context` when you need more than one context.
 
 ## Daily Usage
 

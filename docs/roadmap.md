@@ -9,12 +9,12 @@
 - read-only backup listing
 - one-off VM/LXC backup trigger
 - storage read-only inventory
+- config initialization and diagnostics
 
 ## Candidate future features
 
 - shell-friendly filters
 - backup restore metadata inspection
-- config doctor
 
 ## Non-goals
 

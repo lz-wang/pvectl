@@ -45,6 +45,37 @@ func TestWriteGuestRowsTable(t *testing.T) {
 	}
 }
 
+func TestWriteDoctorRowsTableJSONAndYAML(t *testing.T) {
+	rows := []DoctorRow{
+		{Check: "CONFIG_PATH", Status: DoctorStatusOK, Message: "/tmp/config.yaml"},
+		{Check: "TOKEN_SECRET_ENV", Status: DoctorStatusFail, Message: "environment variable PVECTL_TOKEN is empty"},
+	}
+
+	var table bytes.Buffer
+	if err := WriteDoctorRows(&table, "table", rows); err != nil {
+		t.Fatalf("write doctor table: %v", err)
+	}
+	if got := table.String(); !strings.Contains(got, "CHECK") || !strings.Contains(got, "TOKEN_SECRET_ENV") || !strings.Contains(got, "fail") {
+		t.Fatalf("table output = %s", got)
+	}
+
+	var jsonBuf bytes.Buffer
+	if err := WriteDoctorRows(&jsonBuf, "json", rows); err != nil {
+		t.Fatalf("write doctor json: %v", err)
+	}
+	if got := jsonBuf.String(); !strings.Contains(got, `"check": "CONFIG_PATH"`) || !strings.Contains(got, `"status": "fail"`) {
+		t.Fatalf("json output = %s", got)
+	}
+
+	var yamlBuf bytes.Buffer
+	if err := WriteDoctorRows(&yamlBuf, "yaml", rows); err != nil {
+		t.Fatalf("write doctor yaml: %v", err)
+	}
+	if got := yamlBuf.String(); !strings.Contains(got, "check: CONFIG_PATH") || !strings.Contains(got, "status: fail") {
+		t.Fatalf("yaml output = %s", got)
+	}
+}
+
 func TestWriteGuestRowsWithKindTable(t *testing.T) {
 	var buf bytes.Buffer
 	rows := []GuestRow{{Kind: "lxc", VMID: 200, Name: "app", Node: "pve1", Status: "running", MaxMem: 2 * 1024 * 1024 * 1024}}
