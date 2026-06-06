@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.0.0 - 2026-06-06
+
+### Added
+
+- Add `pvectl version` with table, JSON, and YAML output.
+- Add build metadata for version, commit, date, Go version, OS, and arch.
+- Use profiles for user-facing config selection in v1.0.0.
+- Add v1.x output schema documentation for script-facing JSON/YAML fields.
+- Add v1.x compatibility policy for commands, flags, structured output, and
+  stdout/stderr behavior.
+- Add command golden tests for key JSON outputs.
+- Add output contract tests for public structured output types.
+- Add `make install` and `make uninstall` targets.
+
+### Changed
+
+- Treat JSON/YAML output field names and field types as stable within v1.x.
+- Keep table output documented as human-facing rather than script-facing.
+- Inject commit and build date metadata in local and GitHub Actions builds.
+- Use the matching `CHANGELOG.md` version section as GitHub Release notes.
+
+### Notes
+
+- No new Proxmox mutation APIs are added.
+- No server mode, Web UI, RBAC, audit, restore, prune, PBS management, storage
+  write support, generic filters, or API passthrough is included.
+
 ## v0.9 - 2026-06-06
 
 ### Added

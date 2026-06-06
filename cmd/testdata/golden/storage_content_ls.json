@@ -1,0 +1,17 @@
+[
+  {
+    "node": "pve1",
+    "storage": "backup",
+    "content": "backup",
+    "vmid": 100,
+    "volid": "backup:backup/vzdump-qemu-100-2026_06_06-00_00_00.vma.zst",
+    "format": "vma.zst",
+    "size": 1024,
+    "used": 512,
+    "ctime": 1710000000,
+    "protected": "1",
+    "encrypted": "0",
+    "verify_state": "ok",
+    "notes": "daily"
+  }
+]

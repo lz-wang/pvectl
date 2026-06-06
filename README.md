@@ -15,10 +15,16 @@ make build
 
 The binary is written to `bin/pvectl`.
 
+Optional local install:
+
+```bash
+sudo make install
+```
+
 ## Configure
 
-For a typical HomeLab setup, one default context is enough. Create an API token
-in Proxmox VE, export the token secret, initialize the context, then run a
+For a typical HomeLab setup, one default profile is enough. Create an API token
+in Proxmox VE, export the token secret, initialize the profile, then run a
 diagnostic check:
 
 ```bash
@@ -35,12 +41,13 @@ pvectl doctor
 
 `pvectl` stores only the environment variable name in
 `~/.config/pvectl/config.yaml`; it does not write token secrets to disk.
-Use `pvectl config set-context` when you need more than one context.
+Use `pvectl config set-profile` when you need more than one profile.
 
 ## Daily Usage
 
 ```bash
 pvectl node ls
+pvectl version
 
 pvectl guest ls
 pvectl guest get 100
@@ -82,8 +89,11 @@ Default output is `table` for humans. Use `-o json` for scripts:
 pvectl guest get 100 -o json
 ```
 
-See [docs/usage.md](docs/usage.md) for clone, config, resize, migrate,
-snapshot, delete, and scripting details.
+JSON and YAML fields are stable within v1.x. See [docs/usage.md](docs/usage.md)
+for clone, config, resize, migrate, snapshot, delete, output formats, and
+scripting details. See [docs/output-schema.md](docs/output-schema.md) and
+[docs/compatibility.md](docs/compatibility.md) for the structured output and
+compatibility contracts.
 
 ## Non-goals
 

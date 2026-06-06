@@ -1,0 +1,14 @@
+{
+  "kind": "vm",
+  "vmid": 100,
+  "name": "debian",
+  "node": "pve1",
+  "status": "running",
+  "cpus": 2,
+  "cpu": 0.1,
+  "mem": 536870912,
+  "max_mem": 2147483648,
+  "max_disk": 10737418240,
+  "uptime": 120,
+  "tags": "lab"
+}

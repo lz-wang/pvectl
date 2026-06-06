@@ -14,7 +14,7 @@ var commandRoots = map[string]bool{
 
 var flagsWithValues = map[string]bool{
 	"--config":           true,
-	"--context":          true,
+	"--profile":          true,
 	"--output":           true,
 	"-o":                 true,
 	"--timeout":          true,

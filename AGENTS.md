@@ -22,7 +22,7 @@ Keep the tool small and predictable. Do not turn it into:
   prompts, and command-level tests.
 - `internal/pve/` contains the Proxmox backend, guest services, task handling,
   and `go-proxmox` wrappers.
-- `internal/config/` contains YAML config loading, saving, context selection,
+- `internal/config/` contains YAML config loading, saving, profile selection,
   and token-secret environment resolution.
 - `internal/output/` contains table, JSON, and YAML rendering.
 - `docs/usage.md` contains the complete command reference.
@@ -47,6 +47,18 @@ Keep the tool small and predictable. Do not turn it into:
 - Doctor commands must not print token secrets.
 - Doctor should prefer structured diagnostic rows over early returns so users
   can see multiple failures in one run.
+
+## v1 Compatibility Rules
+
+- Do not rename or remove documented commands or flags in v1.x.
+- Do not change documented positional argument order or meaning in v1.x.
+- Do not rename, remove, or change the type of JSON/YAML output fields in v1.x.
+- Adding new JSON/YAML fields is allowed.
+- Table output may be adjusted for readability, but command results must remain
+  on stdout.
+- Task IDs and wait progress must remain on stderr.
+- Dangerous operations must keep local confirmation unless existing `--force`
+  behavior applies.
 
 ## Documentation Rules
 

@@ -5,7 +5,7 @@ operations.
 
 ## Configuration
 
-For a typical HomeLab setup, initialize one default context and run a
+For a typical HomeLab setup, initialize one default profile and run a
 diagnostic check:
 
 ```bash
@@ -18,15 +18,15 @@ pvectl config init \
   --insecure
 
 pvectl doctor
-pvectl config current-context
+pvectl config current-profile
 pvectl config view
 ```
 
 Config schema:
 
 ```yaml
-current_context: home
-contexts:
+current_profile: home
+profiles:
   home:
     endpoint: https://pve.lan:8006/api2/json
     token_id: automation@pve!pvectl
@@ -39,22 +39,22 @@ contexts:
 The token secret is read from the named environment variable at runtime.
 `pvectl` does not write token secrets to disk.
 
-Use `config set-context` and `config use-context` when you need to manage more
-than one context:
+Use `config set-profile` and `config use-profile` when you need to manage more
+than one profile:
 
 ```bash
-pvectl config set-context lab \
+pvectl config set-profile lab \
   --endpoint https://pve-lab.lan:8006/api2/json \
   --token-id automation@pve!pvectl \
   --token-secret-env PVECTL_LAB_TOKEN_SECRET \
   --timeout 30s \
   --default-output table
 
-pvectl config use-context lab
+pvectl config use-profile lab
 ```
 
-`config init` defaults to context name `home`, timeout `30s`, default output
-`table`, and sets the initialized context as current. Use `--name`,
+`config init` defaults to profile name `home`, timeout `30s`, default output
+`table`, and sets the initialized profile as current. Use `--name`,
 `--overwrite`, or `--no-use` when you need different initialization behavior.
 
 ## Diagnostics
@@ -66,14 +66,26 @@ pvectl doctor --node pve1
 pvectl doctor -o json
 ```
 
-`doctor` checks the config path, config file, YAML parsing, selected context,
-required context fields, token secret environment variable, timeout,
+`doctor` checks the config path, config file, YAML parsing, selected profile,
+required profile fields, token secret environment variable, timeout,
 default output, endpoint shape, Proxmox API connectivity, and node listing
 permission. It never prints token secret values.
 
 Use `--offline` to skip Proxmox API calls. Use `--node` to verify a specific
 node exists during online checks. Doctor rows are written to stdout and support
 the same `table`, `json`, and `yaml` output formats as resource commands.
+
+## Version
+
+```bash
+pvectl version
+pvectl version -o json
+pvectl --version
+```
+
+`pvectl version` writes build and runtime metadata. It does not read the config
+file or connect to Proxmox VE. `pvectl --version` keeps the compact CLI version
+print from the underlying CLI framework.
 
 ## Daily Commands
 
@@ -346,6 +358,11 @@ pvectl lxc get 200 -o yaml
 Use `table` for interactive use, `json` for scripts and agents, and `yaml` as
 an optional human-readable structured format.
 
+JSON and YAML field names and field types are stable within v1.x. Table output
+is intended for humans and should not be parsed by scripts. See
+[`output-schema.md`](output-schema.md) and
+[`compatibility.md`](compatibility.md).
+
 ## Scripting Notes
 
 Global flags:
@@ -353,7 +370,7 @@ Global flags:
 ```bash
 pvectl \
   --config ~/.config/pvectl/config.yaml \
-  --context home \
+  --profile home \
   -o json \
   --timeout 30s \
   --insecure \

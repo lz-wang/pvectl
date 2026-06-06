@@ -15,7 +15,7 @@ import (
 
 type DoctorOptions struct {
 	ConfigPath  string
-	ContextName string
+	ProfileName string
 	Offline     bool
 	Node        string
 	Timeout     time.Duration
@@ -31,10 +31,10 @@ type DoctorResult struct {
 }
 
 type DoctorService struct {
-	backendFactory func(config.Context, ClientOptions) (Backend, error)
+	backendFactory func(config.Profile, ClientOptions) (Backend, error)
 }
 
-func NewDoctorService(backendFactory func(config.Context, ClientOptions) (Backend, error)) *DoctorService {
+func NewDoctorService(backendFactory func(config.Profile, ClientOptions) (Backend, error)) *DoctorService {
 	if backendFactory == nil {
 		backendFactory = NewProxmoxBackend
 	}
@@ -84,23 +84,23 @@ func (s *DoctorService) Run(ctx context.Context, options DoctorOptions) DoctorRe
 	}
 	result.add("CONFIG_PARSE", output.DoctorStatusOK, "yaml parsed")
 
-	contextName, ctxCfg, err := cfg.SelectContext(options.ContextName)
+	profileName, profile, err := cfg.SelectProfile(options.ProfileName)
 	if err != nil {
-		result.add("CURRENT_CONTEXT", output.DoctorStatusFail, err.Error())
-		result.skipContextChecks("CURRENT_CONTEXT")
+		result.add("CURRENT_PROFILE", output.DoctorStatusFail, err.Error())
+		result.skipProfileChecks("CURRENT_PROFILE")
 		result.skipOnline(options)
 		return result
 	}
-	result.add("CURRENT_CONTEXT", output.DoctorStatusOK, contextName)
+	result.add("CURRENT_PROFILE", output.DoctorStatusOK, profileName)
 
-	fieldsOK := result.checkContextFields(ctxCfg)
-	tokenSecret, tokenOK := result.checkTokenSecret(ctxCfg)
-	timeout, timeoutOK := result.checkTimeout(ctxCfg, options.Timeout)
-	defaultOutputOK := result.checkDefaultOutput(ctxCfg)
-	endpointOK := result.checkEndpoint(ctxCfg, options.Insecure)
+	fieldsOK := result.checkProfileFields(profile)
+	tokenSecret, tokenOK := result.checkTokenSecret(profile)
+	timeout, timeoutOK := result.checkTimeout(profile, options.Timeout)
+	defaultOutputOK := result.checkDefaultOutput(profile)
+	endpointOK := result.checkEndpoint(profile, options.Insecure)
 
-	if !options.OutputSet && defaultOutputOK && ctxCfg.DefaultOutput != "" {
-		result.Format = output.NormalizeFormat(ctxCfg.DefaultOutput)
+	if !options.OutputSet && defaultOutputOK && profile.DefaultOutput != "" {
+		result.Format = output.NormalizeFormat(profile.DefaultOutput)
 	}
 
 	if options.Offline {
@@ -113,7 +113,7 @@ func (s *DoctorService) Run(ctx context.Context, options DoctorOptions) DoctorRe
 		return result
 	}
 
-	backend, err := s.backendFactory(ctxCfg, ClientOptions{
+	backend, err := s.backendFactory(profile, ClientOptions{
 		TokenSecret: tokenSecret,
 		Timeout:     timeout,
 		Insecure:    options.Insecure,
@@ -154,8 +154,8 @@ func (r *DoctorResult) skipLocalAfter(check string) {
 	checks := []string{
 		"CONFIG_FILE",
 		"CONFIG_PARSE",
-		"CURRENT_CONTEXT",
-		"CONTEXT_FIELDS",
+		"CURRENT_PROFILE",
+		"PROFILE_FIELDS",
 		"TOKEN_SECRET_ENV",
 		"TIMEOUT",
 		"DEFAULT_OUTPUT",
@@ -170,9 +170,9 @@ func (r *DoctorResult) skipLocalAfter(check string) {
 	}
 }
 
-func (r *DoctorResult) skipContextChecks(check string) {
+func (r *DoctorResult) skipProfileChecks(check string) {
 	reason := fmt.Sprintf("skipped due to %s failure", check)
-	for _, name := range []string{"CONTEXT_FIELDS", "TOKEN_SECRET_ENV", "TIMEOUT", "DEFAULT_OUTPUT", "ENDPOINT"} {
+	for _, name := range []string{"PROFILE_FIELDS", "TOKEN_SECRET_ENV", "TIMEOUT", "DEFAULT_OUTPUT", "ENDPOINT"} {
 		r.add(name, output.DoctorStatusSkip, reason)
 	}
 }
@@ -194,59 +194,59 @@ func (r *DoctorResult) skipNode(node, reason string) {
 	r.add("NODE", output.DoctorStatusSkip, reason)
 }
 
-func (r *DoctorResult) checkContextFields(ctxCfg config.Context) bool {
+func (r *DoctorResult) checkProfileFields(profile config.Profile) bool {
 	var missing []string
-	if ctxCfg.Endpoint == "" {
+	if profile.Endpoint == "" {
 		missing = append(missing, "endpoint")
 	}
-	if ctxCfg.TokenID == "" {
+	if profile.TokenID == "" {
 		missing = append(missing, "token_id")
 	}
-	if ctxCfg.TokenSecretEnv == "" {
+	if profile.TokenSecretEnv == "" {
 		missing = append(missing, "token_secret_env")
 	}
 	if len(missing) > 0 {
-		r.add("CONTEXT_FIELDS", output.DoctorStatusFail, "missing "+strings.Join(missing, ", "))
+		r.add("PROFILE_FIELDS", output.DoctorStatusFail, "missing "+strings.Join(missing, ", "))
 		return false
 	}
-	r.add("CONTEXT_FIELDS", output.DoctorStatusOK, "endpoint, token_id, token_secret_env")
+	r.add("PROFILE_FIELDS", output.DoctorStatusOK, "endpoint, token_id, token_secret_env")
 	return true
 }
 
-func (r *DoctorResult) checkTokenSecret(ctxCfg config.Context) (string, bool) {
-	secret, err := config.ResolveTokenSecret(ctxCfg)
+func (r *DoctorResult) checkTokenSecret(profile config.Profile) (string, bool) {
+	secret, err := config.ResolveTokenSecret(profile)
 	if err != nil {
 		r.add("TOKEN_SECRET_ENV", output.DoctorStatusFail, err.Error())
 		return "", false
 	}
-	r.add("TOKEN_SECRET_ENV", output.DoctorStatusOK, fmt.Sprintf("%s is set", ctxCfg.TokenSecretEnv))
+	r.add("TOKEN_SECRET_ENV", output.DoctorStatusOK, fmt.Sprintf("%s is set", profile.TokenSecretEnv))
 	return secret, true
 }
 
-func (r *DoctorResult) checkTimeout(ctxCfg config.Context, override time.Duration) (time.Duration, bool) {
+func (r *DoctorResult) checkTimeout(profile config.Profile, override time.Duration) (time.Duration, bool) {
 	if override > 0 {
 		r.add("TIMEOUT", output.DoctorStatusOK, fmt.Sprintf("%s (from flag)", override))
 		return override, true
 	}
-	if ctxCfg.Timeout == "" {
+	if profile.Timeout == "" {
 		r.add("TIMEOUT", output.DoctorStatusWarn, "timeout is empty, runtime default 30s will be used")
 		return 0, true
 	}
-	timeout, err := time.ParseDuration(ctxCfg.Timeout)
+	timeout, err := time.ParseDuration(profile.Timeout)
 	if err != nil {
-		r.add("TIMEOUT", output.DoctorStatusFail, fmt.Sprintf("invalid timeout %q: %v", ctxCfg.Timeout, err))
+		r.add("TIMEOUT", output.DoctorStatusFail, fmt.Sprintf("invalid timeout %q: %v", profile.Timeout, err))
 		return 0, false
 	}
-	r.add("TIMEOUT", output.DoctorStatusOK, ctxCfg.Timeout)
+	r.add("TIMEOUT", output.DoctorStatusOK, profile.Timeout)
 	return timeout, true
 }
 
-func (r *DoctorResult) checkDefaultOutput(ctxCfg config.Context) bool {
-	if ctxCfg.DefaultOutput == "" {
+func (r *DoctorResult) checkDefaultOutput(profile config.Profile) bool {
+	if profile.DefaultOutput == "" {
 		r.add("DEFAULT_OUTPUT", output.DoctorStatusWarn, "default_output is empty, table will be used")
 		return false
 	}
-	format := output.NormalizeFormat(ctxCfg.DefaultOutput)
+	format := output.NormalizeFormat(profile.DefaultOutput)
 	if err := output.ValidateFormat(format); err != nil {
 		r.add("DEFAULT_OUTPUT", output.DoctorStatusFail, err.Error())
 		return false
@@ -255,12 +255,12 @@ func (r *DoctorResult) checkDefaultOutput(ctxCfg config.Context) bool {
 	return true
 }
 
-func (r *DoctorResult) checkEndpoint(ctxCfg config.Context, insecure bool) bool {
-	if ctxCfg.Endpoint == "" {
+func (r *DoctorResult) checkEndpoint(profile config.Profile, insecure bool) bool {
+	if profile.Endpoint == "" {
 		r.add("ENDPOINT", output.DoctorStatusFail, "endpoint is required")
 		return false
 	}
-	parsed, err := url.Parse(ctxCfg.Endpoint)
+	parsed, err := url.Parse(profile.Endpoint)
 	if err != nil {
 		r.add("ENDPOINT", output.DoctorStatusFail, err.Error())
 		return false
@@ -282,14 +282,14 @@ func (r *DoctorResult) checkEndpoint(ctxCfg config.Context, insecure bool) bool 
 	if !strings.HasSuffix(strings.TrimRight(parsed.Path, "/"), "/api2/json") {
 		warnings = append(warnings, "path does not end with /api2/json")
 	}
-	if insecure || ctxCfg.InsecureSkipVerify {
+	if insecure || profile.InsecureSkipVerify {
 		warnings = append(warnings, "TLS verification disabled")
 	}
 	if len(warnings) > 0 {
-		r.add("ENDPOINT", output.DoctorStatusWarn, fmt.Sprintf("%s (%s)", ctxCfg.Endpoint, strings.Join(warnings, "; ")))
+		r.add("ENDPOINT", output.DoctorStatusWarn, fmt.Sprintf("%s (%s)", profile.Endpoint, strings.Join(warnings, "; ")))
 		return true
 	}
-	r.add("ENDPOINT", output.DoctorStatusOK, ctxCfg.Endpoint)
+	r.add("ENDPOINT", output.DoctorStatusOK, profile.Endpoint)
 	return true
 }
 

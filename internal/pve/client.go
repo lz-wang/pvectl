@@ -15,11 +15,11 @@ type ClientOptions struct {
 	Insecure    bool
 }
 
-func NewProxmoxBackend(ctxCfg config.Context, opts ClientOptions) (Backend, error) {
-	if ctxCfg.Endpoint == "" {
+func NewProxmoxBackend(profile config.Profile, opts ClientOptions) (Backend, error) {
+	if profile.Endpoint == "" {
 		return nil, fmt.Errorf("pve endpoint is empty")
 	}
-	if ctxCfg.TokenID == "" {
+	if profile.TokenID == "" {
 		return nil, fmt.Errorf("pve token_id is empty")
 	}
 	if opts.TokenSecret == "" {
@@ -30,13 +30,13 @@ func NewProxmoxBackend(ctxCfg config.Context, opts ClientOptions) (Backend, erro
 	}
 
 	clientOpts := []proxmox.Option{
-		proxmox.WithAPIToken(ctxCfg.TokenID, opts.TokenSecret),
+		proxmox.WithAPIToken(profile.TokenID, opts.TokenSecret),
 		proxmox.WithTimeout(opts.Timeout),
 		proxmox.WithRetry(),
 	}
-	if opts.Insecure || ctxCfg.InsecureSkipVerify {
+	if opts.Insecure || profile.InsecureSkipVerify {
 		clientOpts = append(clientOpts, proxmox.WithInsecureSkipVerify())
 	}
 
-	return &ProxmoxBackend{client: proxmox.NewClient(ctxCfg.Endpoint, clientOpts...)}, nil
+	return &ProxmoxBackend{client: proxmox.NewClient(profile.Endpoint, clientOpts...)}, nil
 }

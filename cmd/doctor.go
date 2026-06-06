@@ -36,7 +36,7 @@ func newDoctorCommand(deps Dependencies) *cli.Command {
 
 			result := pve.NewDoctorService(deps.BackendFactory).Run(c.Context, pve.DoctorOptions{
 				ConfigPath:  c.String("config"),
-				ContextName: c.String("context"),
+				ProfileName: c.String("profile"),
 				Offline:     c.Bool("offline"),
 				Node:        c.String("node"),
 				Timeout:     durationFlag(c, "timeout"),

@@ -17,17 +17,17 @@ func newConfigCommand() *cli.Command {
 		Subcommands: []*cli.Command{
 			{
 				Name:  "init",
-				Usage: "Initialize a default HomeLab context",
+				Usage: "Initialize a default HomeLab profile",
 				Flags: []cli.Flag{
-					&cli.StringFlag{Name: "name", Value: "home", Usage: "context name"},
+					&cli.StringFlag{Name: "name", Value: "home", Usage: "profile name"},
 					&cli.StringFlag{Name: "endpoint", Usage: "PVE API endpoint, for example https://pve.lan:8006/api2/json", Required: true},
 					&cli.StringFlag{Name: "token-id", Usage: "PVE API token id, for example automation@pve!pvectl", Required: true},
 					&cli.StringFlag{Name: "token-secret-env", Usage: "environment variable containing the PVE API token secret", Required: true},
-					&cli.BoolFlag{Name: "insecure", Usage: "skip TLS certificate verification for this context"},
-					&cli.StringFlag{Name: "timeout", Value: "30s", Usage: "PVE API request timeout for this context"},
+					&cli.BoolFlag{Name: "insecure", Usage: "skip TLS certificate verification for this profile"},
+					&cli.StringFlag{Name: "timeout", Value: "30s", Usage: "PVE API request timeout for this profile"},
 					&cli.StringFlag{Name: "default-output", Value: output.FormatTable, Usage: "default output format: table,json,yaml"},
-					&cli.BoolFlag{Name: "overwrite", Usage: "overwrite an existing context"},
-					&cli.BoolFlag{Name: "no-use", Usage: "do not set the initialized context as current"},
+					&cli.BoolFlag{Name: "overwrite", Usage: "overwrite an existing profile"},
+					&cli.BoolFlag{Name: "no-use", Usage: "do not set the initialized profile as current"},
 				},
 				Action: func(c *cli.Context) error {
 					if err := requireNoExtraArgs(c, 0); err != nil {
@@ -45,9 +45,9 @@ func newConfigCommand() *cli.Command {
 					if err != nil {
 						return fmt.Errorf("config error: %w", err)
 					}
-					if err := cfg.InitContext(config.InitOptions{
+					if err := cfg.InitProfile(config.InitOptions{
 						Name: c.String("name"),
-						Context: config.Context{
+						Profile: config.Profile{
 							Endpoint:           c.String("endpoint"),
 							TokenID:            c.String("token-id"),
 							TokenSecretEnv:     c.String("token-secret-env"),
@@ -64,15 +64,15 @@ func newConfigCommand() *cli.Command {
 				},
 			},
 			{
-				Name:      "set-context",
-				Usage:     "Create or update a context",
+				Name:      "set-profile",
+				Usage:     "Create or update a profile",
 				ArgsUsage: "NAME",
 				Flags: []cli.Flag{
 					&cli.StringFlag{Name: "endpoint", Usage: "PVE API endpoint, for example https://pve.lan:8006/api2/json", Required: true},
 					&cli.StringFlag{Name: "token-id", Usage: "PVE API token id, for example automation@pve!pvectl", Required: true},
 					&cli.StringFlag{Name: "token-secret-env", Usage: "environment variable containing the PVE API token secret", Required: true},
-					&cli.BoolFlag{Name: "insecure", Usage: "skip TLS certificate verification for this context"},
-					&cli.StringFlag{Name: "timeout", Usage: "PVE API request timeout for this context"},
+					&cli.BoolFlag{Name: "insecure", Usage: "skip TLS certificate verification for this profile"},
+					&cli.StringFlag{Name: "timeout", Usage: "PVE API request timeout for this profile"},
 					&cli.StringFlag{Name: "default-output", Usage: "default output format: table,json,yaml"},
 				},
 				Action: func(c *cli.Context) error {
@@ -90,7 +90,7 @@ func newConfigCommand() *cli.Command {
 					if err != nil {
 						return fmt.Errorf("config error: %w", err)
 					}
-					if err := cfg.SetContext(c.Args().First(), config.Context{
+					if err := cfg.SetProfile(c.Args().First(), config.Profile{
 						Endpoint:           c.String("endpoint"),
 						TokenID:            c.String("token-id"),
 						TokenSecretEnv:     c.String("token-secret-env"),
@@ -104,8 +104,8 @@ func newConfigCommand() *cli.Command {
 				},
 			},
 			{
-				Name:      "use-context",
-				Usage:     "Set the current context",
+				Name:      "use-profile",
+				Usage:     "Set the current profile",
 				ArgsUsage: "NAME",
 				Action: func(c *cli.Context) error {
 					if err := requireNoExtraArgs(c, 1); err != nil {
@@ -115,15 +115,15 @@ func newConfigCommand() *cli.Command {
 					if err != nil {
 						return fmt.Errorf("config error: %w", err)
 					}
-					if err := cfg.UseContext(c.Args().First()); err != nil {
+					if err := cfg.UseProfile(c.Args().First()); err != nil {
 						return fmt.Errorf("config error: %w", err)
 					}
 					return config.Save(c.String("config"), cfg)
 				},
 			},
 			{
-				Name:  "current-context",
-				Usage: "Print the current context",
+				Name:  "current-profile",
+				Usage: "Print the current profile",
 				Action: func(c *cli.Context) error {
 					if err := requireNoExtraArgs(c, 0); err != nil {
 						return err
@@ -132,10 +132,10 @@ func newConfigCommand() *cli.Command {
 					if err != nil {
 						return fmt.Errorf("config error: %w", err)
 					}
-					if cfg.CurrentContext == "" {
-						return fmt.Errorf("config error: current_context is empty")
+					if cfg.CurrentProfile == "" {
+						return fmt.Errorf("config error: current_profile is empty")
 					}
-					_, err = fmt.Fprintln(c.App.Writer, cfg.CurrentContext)
+					_, err = fmt.Fprintln(c.App.Writer, cfg.CurrentProfile)
 					return err
 				},
 			},
@@ -158,6 +158,19 @@ func newConfigCommand() *cli.Command {
 					return err
 				},
 			},
+			removedContextCommand("set-context", "set-profile"),
+			removedContextCommand("use-context", "use-profile"),
+			removedContextCommand("current-context", "current-profile"),
+		},
+	}
+}
+
+func removedContextCommand(name, replacement string) *cli.Command {
+	return &cli.Command{
+		Name:   name,
+		Hidden: true,
+		Action: func(*cli.Context) error {
+			return fmt.Errorf("config %s was removed; use config %s", name, replacement)
 		},
 	}
 }

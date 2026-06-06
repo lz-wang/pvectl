@@ -74,7 +74,7 @@ func TestConfirmRollback(t *testing.T) {
 	}
 }
 
-func TestVMListCommandUsesDefaultOutputFromContext(t *testing.T) {
+func TestVMListCommandUsesDefaultOutputFromProfile(t *testing.T) {
 	cfgPath := writeTestConfig(t, "json")
 
 	var stdout bytes.Buffer
@@ -85,7 +85,7 @@ func TestVMListCommandUsesDefaultOutputFromContext(t *testing.T) {
 	deps := Dependencies{
 		Stdout: &stdout,
 		Stderr: &bytes.Buffer{},
-		BackendFactory: func(config.Context, pve.ClientOptions) (pve.Backend, error) {
+		BackendFactory: func(config.Profile, pve.ClientOptions) (pve.Backend, error) {
 			return backend, nil
 		},
 	}
@@ -93,6 +93,60 @@ func TestVMListCommandUsesDefaultOutputFromContext(t *testing.T) {
 	err := RunWithDependencies([]string{"pvectl", "--config", cfgPath, "vm", "ls"}, "test", deps)
 	if err != nil {
 		t.Fatalf("run: %v", err)
+	}
+	if !strings.Contains(stdout.String(), `"vmid": 100`) {
+		t.Fatalf("stdout = %s", stdout.String())
+	}
+}
+
+func TestVMListCommandUsesSelectedProfile(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
+	t.Setenv("PVECTL_TOKEN", "secret")
+	cfg := config.Empty()
+	if err := cfg.SetProfile("home", config.Profile{
+		Endpoint:       "https://pve-home.example:8006/api2/json",
+		TokenID:        "root@pam!home",
+		TokenSecretEnv: "PVECTL_TOKEN",
+		DefaultOutput:  "table",
+	}); err != nil {
+		t.Fatalf("set home profile: %v", err)
+	}
+	if err := cfg.SetProfile("lab", config.Profile{
+		Endpoint:       "https://pve-lab.example:8006/api2/json",
+		TokenID:        "root@pam!lab",
+		TokenSecretEnv: "PVECTL_TOKEN",
+		DefaultOutput:  "json",
+	}); err != nil {
+		t.Fatalf("set lab profile: %v", err)
+	}
+	if err := cfg.UseProfile("home"); err != nil {
+		t.Fatalf("use home profile: %v", err)
+	}
+	if err := config.Save(cfgPath, cfg); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	backend := &commandBackend{
+		nodes: []output.NodeRow{{Name: "pve1"}},
+		vms:   map[string][]output.GuestRow{"pve1": {{Kind: "vm", VMID: 100, Name: "debian", Node: "pve1"}}},
+	}
+	var selected config.Profile
+	deps := Dependencies{
+		Stdout: &stdout,
+		Stderr: &bytes.Buffer{},
+		BackendFactory: func(profile config.Profile, _ pve.ClientOptions) (pve.Backend, error) {
+			selected = profile
+			return backend, nil
+		},
+	}
+
+	err := RunWithDependencies([]string{"pvectl", "--config", cfgPath, "--profile", "lab", "vm", "ls"}, "test", deps)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if selected.TokenID != "root@pam!lab" {
+		t.Fatalf("selected profile = %#v", selected)
 	}
 	if !strings.Contains(stdout.String(), `"vmid": 100`) {
 		t.Fatalf("stdout = %s", stdout.String())
@@ -673,12 +727,12 @@ func TestSnapshotRollbackCommandConfirms(t *testing.T) {
 	}
 }
 
-func TestConfigSetContextCommandDoesNotRequireSecretEnv(t *testing.T) {
+func TestConfigSetProfileCommandDoesNotRequireSecretEnv(t *testing.T) {
 	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
 	err := RunWithDependencies([]string{
 		"pvectl",
 		"--config", cfgPath,
-		"config", "set-context", "home",
+		"config", "set-profile", "home",
 		"--endpoint", "https://pve.example:8006/api2/json",
 		"--token-id", "root@pam!test",
 		"--token-secret-env", "PVECTL_TOKEN",
@@ -895,13 +949,13 @@ func writeTestConfig(t *testing.T, defaultOutput string) string {
 	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
 	t.Setenv("PVECTL_TOKEN", "secret")
 	cfg := config.Empty()
-	if err := cfg.SetContext("home", config.Context{
+	if err := cfg.SetProfile("home", config.Profile{
 		Endpoint:       "https://pve.example:8006/api2/json",
 		TokenID:        "root@pam!test",
 		TokenSecretEnv: "PVECTL_TOKEN",
 		DefaultOutput:  defaultOutput,
 	}); err != nil {
-		t.Fatalf("set context: %v", err)
+		t.Fatalf("set profile: %v", err)
 	}
 	if err := config.Save(cfgPath, cfg); err != nil {
 		t.Fatalf("save config: %v", err)
@@ -913,7 +967,7 @@ func testDeps(stdout *bytes.Buffer, backend pve.Backend) Dependencies {
 	return Dependencies{
 		Stdout: stdout,
 		Stderr: &bytes.Buffer{},
-		BackendFactory: func(config.Context, pve.ClientOptions) (pve.Backend, error) {
+		BackendFactory: func(config.Profile, pve.ClientOptions) (pve.Backend, error) {
 			return backend, nil
 		},
 	}

@@ -136,6 +136,15 @@ type DoctorRow struct {
 	Message string       `json:"message" yaml:"message"`
 }
 
+type VersionInfo struct {
+	Version   string `json:"version" yaml:"version"`
+	Commit    string `json:"commit" yaml:"commit"`
+	Date      string `json:"date" yaml:"date"`
+	GoVersion string `json:"go_version" yaml:"go_version"`
+	OS        string `json:"os" yaml:"os"`
+	Arch      string `json:"arch" yaml:"arch"`
+}
+
 func ValidateFormat(format string) error {
 	switch strings.ToLower(format) {
 	case FormatTable, FormatJSON, FormatYAML:
@@ -216,6 +225,28 @@ func WriteDoctorRows(w io.Writer, format string, rows []DoctorRow) error {
 			if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\n", row.Check, row.Status, row.Message); err != nil {
 				return err
 			}
+		}
+		return tw.Flush()
+	})
+}
+
+func WriteVersionInfo(w io.Writer, format string, info VersionInfo) error {
+	return Write(w, format, info, func(w io.Writer) error {
+		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+		if _, err := fmt.Fprintln(tw, "VERSION\tCOMMIT\tDATE\tGO\tOS\tARCH"); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(
+			tw,
+			"%s\t%s\t%s\t%s\t%s\t%s\n",
+			info.Version,
+			info.Commit,
+			info.Date,
+			info.GoVersion,
+			info.OS,
+			info.Arch,
+		); err != nil {
+			return err
 		}
 		return tw.Flush()
 	})

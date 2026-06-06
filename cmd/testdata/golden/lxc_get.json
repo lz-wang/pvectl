@@ -1,0 +1,14 @@
+{
+  "kind": "lxc",
+  "vmid": 200,
+  "name": "app",
+  "node": "pve1",
+  "status": "stopped",
+  "cpus": 1,
+  "cpu": 0.02,
+  "mem": 268435456,
+  "max_mem": 1073741824,
+  "max_disk": 5368709120,
+  "uptime": 0,
+  "tags": "svc"
+}

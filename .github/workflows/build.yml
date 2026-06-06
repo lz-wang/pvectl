@@ -21,6 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.VERSION }}
+      commit: ${{ steps.metadata.outputs.COMMIT }}
+      date: ${{ steps.metadata.outputs.DATE }}
       checkout_ref: ${{ steps.version.outputs.CHECKOUT_REF }}
       is_release: ${{ steps.version.outputs.IS_RELEASE }}
       release_tag: ${{ steps.version.outputs.RELEASE_TAG }}
@@ -64,6 +66,14 @@ jobs:
         with:
           ref: ${{ steps.version.outputs.CHECKOUT_REF }}
           fetch-depth: 0
+
+      - name: Resolve build metadata
+        id: metadata
+        run: |
+          {
+            echo "COMMIT=$(git rev-parse --short HEAD)"
+            echo "DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Detect duplicate branch/tag push
         id: duplicate
@@ -133,9 +143,11 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           VERSION: ${{ needs.test.outputs.version }}
+          COMMIT: ${{ needs.test.outputs.commit }}
+          DATE: ${{ needs.test.outputs.date }}
         run: |
           output="pvectl-${VERSION}-${GOOS}-${GOARCH}${{ matrix.suffix }}"
-          CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o "${output}" ./main.go
+          CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" -o "${output}" ./main.go
           sha256sum "${output}" > "${output}.sha256"
 
       - name: Upload release artifact
@@ -153,6 +165,42 @@ jobs:
     needs: [test, build]
     if: ${{ needs.test.outputs.is_release == 'true' }}
     steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.test.outputs.checkout_ref }}
+
+      - name: Extract release notes from changelog
+        env:
+          TAG: ${{ needs.test.outputs.release_tag }}
+        run: |
+          awk -v tag="$TAG" '
+            BEGIN { found = 0 }
+            /^## / {
+              if (found) {
+                exit
+              }
+              heading = $0
+              sub(/^##[[:space:]]+/, "", heading)
+              split(heading, parts, /[[:space:]]+/)
+              if (parts[1] == tag) {
+                found = 1
+                next
+              }
+            }
+            found {
+              print
+            }
+            END {
+              if (!found) {
+                exit 1
+              }
+            }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "CHANGELOG.md section for ${TAG} is empty or missing" >&2
+            exit 1
+          fi
+
       - name: Download release artifacts
         uses: actions/download-artifact@v4
         with:
@@ -165,7 +213,11 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.test.outputs.release_tag }}
         run: |
-          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --notes "Release $TAG"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file release-notes.md
+          else
+            gh release create "$TAG" --title "$TAG" --notes-file release-notes.md
+          fi
           gh release upload "$TAG" release-assets/* --clobber
 
   notify:

@@ -1,0 +1,57 @@
+[
+  {
+    "check": "CONFIG_PATH",
+    "status": "ok",
+    "message": "{{CONFIG_PATH}}"
+  },
+  {
+    "check": "CONFIG_FILE",
+    "status": "ok",
+    "message": "exists"
+  },
+  {
+    "check": "CONFIG_PARSE",
+    "status": "ok",
+    "message": "yaml parsed"
+  },
+  {
+    "check": "CURRENT_PROFILE",
+    "status": "ok",
+    "message": "home"
+  },
+  {
+    "check": "PROFILE_FIELDS",
+    "status": "ok",
+    "message": "endpoint, token_id, token_secret_env"
+  },
+  {
+    "check": "TOKEN_SECRET_ENV",
+    "status": "ok",
+    "message": "PVECTL_TOKEN is set"
+  },
+  {
+    "check": "TIMEOUT",
+    "status": "warn",
+    "message": "timeout is empty, runtime default 30s will be used"
+  },
+  {
+    "check": "DEFAULT_OUTPUT",
+    "status": "ok",
+    "message": "table"
+  },
+  {
+    "check": "ENDPOINT",
+    "status": "ok",
+    "message": "https://pve.example:8006/api2/json"
+  },
+  {
+    "check": "API_CONNECTIVITY",
+    "status": "skip",
+    "message": "skipped in offline mode"
+  },
+  {
+    "check": "NODES",
+    "status": "skip",
+    "message": "skipped in offline mode"
+  }
+]

@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	goruntime "runtime"
 	"time"
 
 	"github.com/urfave/cli/v2"
@@ -14,13 +15,19 @@ import (
 	"github.com/lz-wang/pvectl/internal/pve"
 )
 
-type BackendFactory func(config.Context, pve.ClientOptions) (pve.Backend, error)
+type BackendFactory func(config.Profile, pve.ClientOptions) (pve.Backend, error)
 
 type Dependencies struct {
 	BackendFactory BackendFactory
 	Stdin          io.Reader
 	Stdout         io.Writer
 	Stderr         io.Writer
+}
+
+type BuildInfo struct {
+	Version string
+	Commit  string
+	Date    string
 }
 
 type runtime struct {
@@ -42,17 +49,31 @@ func Run(args []string, version string) error {
 }
 
 func RunWithDependencies(args []string, version string, deps Dependencies) error {
-	app := NewAppWithDependencies(version, deps)
+	return RunWithBuildInfoAndDependencies(args, BuildInfo{Version: version}, deps)
+}
+
+func RunWithBuildInfo(args []string, info BuildInfo) error {
+	return RunWithBuildInfoAndDependencies(args, info, Dependencies{})
+}
+
+func RunWithBuildInfoAndDependencies(args []string, info BuildInfo, deps Dependencies) error {
+	info = info.withDefaults()
+	app := NewAppWithBuildInfoAndDependencies(info, deps)
 	return app.Run(normalizeArgs(args))
 }
 
 func NewAppWithDependencies(version string, deps Dependencies) *cli.App {
+	return NewAppWithBuildInfoAndDependencies(BuildInfo{Version: version}.withDefaults(), deps)
+}
+
+func NewAppWithBuildInfoAndDependencies(info BuildInfo, deps Dependencies) *cli.App {
+	info = info.withDefaults()
 	deps = deps.withDefaults()
 
 	app := &cli.App{
 		Name:                   "pvectl",
 		Usage:                  "Personal HomeLab Proxmox VE CLI",
-		Version:                version,
+		Version:                info.Version,
 		UseShortOptionHandling: true,
 		Writer:                 deps.Stdout,
 		ErrWriter:              deps.Stderr,
@@ -63,8 +84,8 @@ func NewAppWithDependencies(version string, deps Dependencies) *cli.App {
 				Usage: "config file path",
 			},
 			&cli.StringFlag{
-				Name:  "context",
-				Usage: "context name",
+				Name:  "profile",
+				Usage: "profile name",
 			},
 			&cli.StringFlag{
 				Name:    "output",
@@ -93,6 +114,7 @@ func NewAppWithDependencies(version string, deps Dependencies) *cli.App {
 			},
 		},
 		Commands: []*cli.Command{
+			newVersionCommand(info),
 			newConfigCommand(),
 			newDoctorCommand(deps),
 			newNodeCommand(deps),
@@ -104,6 +126,31 @@ func NewAppWithDependencies(version string, deps Dependencies) *cli.App {
 		},
 	}
 	return app
+}
+
+func (info BuildInfo) withDefaults() BuildInfo {
+	if info.Version == "" {
+		info.Version = "dev"
+	}
+	if info.Commit == "" {
+		info.Commit = "unknown"
+	}
+	if info.Date == "" {
+		info.Date = "unknown"
+	}
+	return info
+}
+
+func (info BuildInfo) versionInfo() output.VersionInfo {
+	info = info.withDefaults()
+	return output.VersionInfo{
+		Version:   info.Version,
+		Commit:    info.Commit,
+		Date:      info.Date,
+		GoVersion: goruntime.Version(),
+		OS:        goruntime.GOOS,
+		Arch:      goruntime.GOARCH,
+	}
 }
 
 func (d Dependencies) withDefaults() Dependencies {
@@ -129,20 +176,20 @@ func buildRuntime(c *cli.Context, deps Dependencies) (*runtime, error) {
 	if err != nil {
 		return nil, fmt.Errorf("config error: %w", err)
 	}
-	_, ctxCfg, err := cfg.SelectContext(c.String("context"))
+	_, profileCfg, err := cfg.SelectProfile(c.String("profile"))
 	if err != nil {
 		return nil, fmt.Errorf("config error: %w", err)
 	}
-	secret, err := config.ResolveTokenSecret(ctxCfg)
+	secret, err := config.ResolveTokenSecret(profileCfg)
 	if err != nil {
 		return nil, fmt.Errorf("config error: %w", err)
 	}
 
-	apiTimeout, err := resolveAPIRequestTimeout(c, ctxCfg)
+	apiTimeout, err := resolveAPIRequestTimeout(c, profileCfg)
 	if err != nil {
 		return nil, err
 	}
-	format, err := resolveOutputFormat(c, ctxCfg)
+	format, err := resolveOutputFormat(c, profileCfg)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +199,7 @@ func buildRuntime(c *cli.Context, deps Dependencies) (*runtime, error) {
 		Level: slog.LevelDebug,
 	}))
 
-	backend, err := deps.BackendFactory(ctxCfg, pve.ClientOptions{
+	backend, err := deps.BackendFactory(profileCfg, pve.ClientOptions{
 		TokenSecret: secret,
 		Timeout:     apiTimeout,
 		Insecure:    boolFlag(c, "insecure"),
@@ -181,24 +228,24 @@ func buildRuntime(c *cli.Context, deps Dependencies) (*runtime, error) {
 	}, nil
 }
 
-func resolveAPIRequestTimeout(c *cli.Context, ctxCfg config.Context) (time.Duration, error) {
+func resolveAPIRequestTimeout(c *cli.Context, profile config.Profile) (time.Duration, error) {
 	if timeout := durationFlag(c, "timeout"); timeout > 0 {
 		return timeout, nil
 	}
-	if ctxCfg.Timeout != "" {
-		timeout, err := time.ParseDuration(ctxCfg.Timeout)
+	if profile.Timeout != "" {
+		timeout, err := time.ParseDuration(profile.Timeout)
 		if err != nil {
-			return 0, fmt.Errorf("config error: invalid timeout %q: %w", ctxCfg.Timeout, err)
+			return 0, fmt.Errorf("config error: invalid timeout %q: %w", profile.Timeout, err)
 		}
 		return timeout, nil
 	}
 	return 30 * time.Second, nil
 }
 
-func resolveOutputFormat(c *cli.Context, ctxCfg config.Context) (string, error) {
+func resolveOutputFormat(c *cli.Context, profile config.Profile) (string, error) {
 	format := stringFlag(c, "output")
 	if format == "" {
-		format = ctxCfg.DefaultOutput
+		format = profile.DefaultOutput
 	}
 	format = output.NormalizeFormat(format)
 	if err := output.ValidateFormat(format); err != nil {

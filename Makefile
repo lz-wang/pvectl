@@ -1,10 +1,14 @@
 APP := pvectl
-VERSION := v$(shell date +%Y%m%d)-$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
-LDFLAGS := -ldflags "-s -w -X main.version=$(VERSION)"
+VERSION ?= v$(shell date +%Y%m%d)-$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+PREFIX ?= /usr/local
+BINDIR ?= $(PREFIX)/bin
+LDFLAGS := -ldflags "-s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)"
 GOENV := CGO_ENABLED=0
 SHA256SUM := $(shell command -v sha256sum >/dev/null 2>&1 && echo sha256sum || echo "shasum -a 256")
 
-.PHONY: all build dist fmt check test clean help
+.PHONY: all build dist install uninstall fmt check test clean help
 
 all: fmt check test build
 
@@ -23,6 +27,13 @@ dist:
 		done; \
 	done
 
+install: build
+	install -d "$(DESTDIR)$(BINDIR)"
+	install -m 0755 "bin/$(APP)" "$(DESTDIR)$(BINDIR)/$(APP)"
+
+uninstall:
+	rm -f "$(DESTDIR)$(BINDIR)/$(APP)"
+
 fmt:
 	go fmt ./...
 
@@ -38,6 +49,8 @@ clean:
 help:
 	@echo "make build  - build binary"
 	@echo "make dist   - build release binaries"
+	@echo "make install - install binary"
+	@echo "make uninstall - remove installed binary"
 	@echo "make fmt    - format code"
 	@echo "make check  - run go vet"
 	@echo "make test   - run tests"

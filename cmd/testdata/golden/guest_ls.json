@@ -1,0 +1,30 @@
+[
+  {
+    "kind": "vm",
+    "vmid": 100,
+    "name": "debian",
+    "node": "pve1",
+    "status": "running",
+    "cpus": 2,
+    "cpu": 0.1,
+    "mem": 536870912,
+    "max_mem": 2147483648,
+    "max_disk": 10737418240,
+    "uptime": 120,
+    "tags": "lab"
+  },
+  {
+    "kind": "lxc",
+    "vmid": 200,
+    "name": "app",
+    "node": "pve1",
+    "status": "stopped",
+    "cpus": 1,
+    "cpu": 0.02,
+    "mem": 268435456,
+    "max_mem": 1073741824,
+    "max_disk": 5368709120,
+    "uptime": 0,
+    "tags": "svc"
+  }
+]

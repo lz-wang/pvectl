@@ -139,7 +139,7 @@ func commandDeps(stdout, stderr *bytes.Buffer, backend pve.Backend) Dependencies
 	return Dependencies{
 		Stdout: stdout,
 		Stderr: stderr,
-		BackendFactory: func(config.Context, pve.ClientOptions) (pve.Backend, error) {
+		BackendFactory: func(config.Profile, pve.ClientOptions) (pve.Backend, error) {
 			return backend, nil
 		},
 	}

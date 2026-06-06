@@ -13,11 +13,11 @@ import (
 const DefaultPath = "~/.config/pvectl/config.yaml"
 
 type Config struct {
-	CurrentContext string             `yaml:"current_context,omitempty"`
-	Contexts       map[string]Context `yaml:"contexts,omitempty"`
+	CurrentProfile string             `yaml:"current_profile,omitempty"`
+	Profiles       map[string]Profile `yaml:"profiles,omitempty"`
 }
 
-type Context struct {
+type Profile struct {
 	Endpoint           string `yaml:"endpoint,omitempty"`
 	TokenID            string `yaml:"token_id,omitempty"`
 	TokenSecretEnv     string `yaml:"token_secret_env,omitempty"`
@@ -28,13 +28,13 @@ type Context struct {
 
 type InitOptions struct {
 	Name      string
-	Context   Context
+	Profile   Profile
 	Overwrite bool
 	Use       bool
 }
 
 func Empty() *Config {
-	return &Config{Contexts: map[string]Context{}}
+	return &Config{Profiles: map[string]Profile{}}
 }
 
 func Load(path string) (*Config, error) {
@@ -127,94 +127,94 @@ func ExpandPath(path string) (string, error) {
 	return filepath.Clean(path), nil
 }
 
-func (c *Config) SetContext(name string, ctx Context) error {
+func (c *Config) SetProfile(name string, profile Profile) error {
 	if name == "" {
-		return errors.New("context name is required")
+		return errors.New("profile name is required")
 	}
-	if err := validateContext(ctx); err != nil {
+	if err := validateProfile(profile); err != nil {
 		return err
 	}
 	c.ensure()
-	c.Contexts[name] = ctx
-	if c.CurrentContext == "" {
-		c.CurrentContext = name
+	c.Profiles[name] = profile
+	if c.CurrentProfile == "" {
+		c.CurrentProfile = name
 	}
 	return nil
 }
 
-func (c *Config) InitContext(options InitOptions) error {
+func (c *Config) InitProfile(options InitOptions) error {
 	name := strings.TrimSpace(options.Name)
 	if name == "" {
-		return errors.New("context name is required")
+		return errors.New("profile name is required")
 	}
-	if err := validateContext(options.Context); err != nil {
+	if err := validateProfile(options.Profile); err != nil {
 		return err
 	}
 
 	c.ensure()
-	if _, exists := c.Contexts[name]; exists && !options.Overwrite {
-		return fmt.Errorf("context %q already exists; use --overwrite to replace it", name)
+	if _, exists := c.Profiles[name]; exists && !options.Overwrite {
+		return fmt.Errorf("profile %q already exists; use --overwrite to replace it", name)
 	}
-	c.Contexts[name] = options.Context
+	c.Profiles[name] = options.Profile
 	if options.Use {
-		c.CurrentContext = name
+		c.CurrentProfile = name
 	}
 	return nil
 }
 
-func (c *Config) UseContext(name string) error {
+func (c *Config) UseProfile(name string) error {
 	if name == "" {
-		return errors.New("context name is required")
+		return errors.New("profile name is required")
 	}
 	c.ensure()
-	if _, ok := c.Contexts[name]; !ok {
-		return fmt.Errorf("context %q not found", name)
+	if _, ok := c.Profiles[name]; !ok {
+		return fmt.Errorf("profile %q not found", name)
 	}
-	c.CurrentContext = name
+	c.CurrentProfile = name
 	return nil
 }
 
-func (c *Config) SelectContext(name string) (string, Context, error) {
+func (c *Config) SelectProfile(name string) (string, Profile, error) {
 	c.ensure()
 	if name == "" {
-		name = c.CurrentContext
+		name = c.CurrentProfile
 	}
 	if name == "" {
-		return "", Context{}, errors.New("context is required; set current_context or pass --context")
+		return "", Profile{}, errors.New("profile is required; set current_profile or pass --profile")
 	}
-	ctx, ok := c.Contexts[name]
+	profile, ok := c.Profiles[name]
 	if !ok {
-		return "", Context{}, fmt.Errorf("context %q not found", name)
+		return "", Profile{}, fmt.Errorf("profile %q not found", name)
 	}
-	return name, ctx, nil
+	return name, profile, nil
 }
 
-func ResolveTokenSecret(ctx Context) (string, error) {
-	if ctx.TokenSecretEnv == "" {
+func ResolveTokenSecret(profile Profile) (string, error) {
+	if profile.TokenSecretEnv == "" {
 		return "", errors.New("token_secret_env is required")
 	}
-	secret := os.Getenv(ctx.TokenSecretEnv)
+	secret := os.Getenv(profile.TokenSecretEnv)
 	if secret == "" {
-		return "", fmt.Errorf("environment variable %s is empty", ctx.TokenSecretEnv)
+		return "", fmt.Errorf("environment variable %s is empty", profile.TokenSecretEnv)
 	}
 	return secret, nil
 }
 
-func validateContext(ctx Context) error {
-	if ctx.Endpoint == "" {
+func validateProfile(profile Profile) error {
+	if profile.Endpoint == "" {
 		return errors.New("endpoint is required")
 	}
-	if ctx.TokenID == "" {
+	if profile.TokenID == "" {
 		return errors.New("token-id is required")
 	}
-	if ctx.TokenSecretEnv == "" {
+	if profile.TokenSecretEnv == "" {
 		return errors.New("token-secret-env is required")
 	}
 	return nil
 }
 
 func (c *Config) ensure() {
-	if c.Contexts == nil {
-		c.Contexts = map[string]Context{}
+	if c.Profiles == nil {
+		c.Profiles = map[string]Profile{}
 	}
 }

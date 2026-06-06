@@ -1,7 +1,8 @@
 # Roadmap
 
-## Current scope
+## Current stable scope
 
+- config initialization and diagnostics
 - VM/QEMU daily operations
 - LXC daily operations
 - read-only guest aggregate views combining VM/QEMU and LXC
@@ -9,12 +10,14 @@
 - read-only backup listing
 - one-off VM/LXC backup trigger
 - storage read-only inventory
-- config initialization and diagnostics
+- stable JSON/YAML output contracts
+- v1.x compatibility policy
 
 ## Candidate future features
 
-- shell-friendly filters
+- shell-friendly query helpers
 - backup restore metadata inspection
+- optional deeper doctor checks
 
 ## Non-goals
 

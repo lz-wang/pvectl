@@ -1,0 +1,8 @@
+{
+  "version": "v1.0.0",
+  "commit": "abc1234",
+  "date": "2026-06-06T00:00:00Z",
+  "go_version": "{{GO_VERSION}}",
+  "os": "{{GOOS}}",
+  "arch": "{{GOARCH}}"
+}

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -10,7 +11,7 @@ import (
 	"github.com/lz-wang/pvectl/internal/output"
 )
 
-func TestConfigInitCommandWritesContext(t *testing.T) {
+func TestConfigInitCommandWritesProfile(t *testing.T) {
 	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
 
 	err := RunWithDependencies([]string{
@@ -30,15 +31,31 @@ func TestConfigInitCommandWritesContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
-	if cfg.CurrentContext != "home" {
-		t.Fatalf("current context = %q, want home", cfg.CurrentContext)
+	if cfg.CurrentProfile != "home" {
+		t.Fatalf("current profile = %q, want home", cfg.CurrentProfile)
 	}
-	ctx := cfg.Contexts["home"]
-	if ctx.Endpoint != "https://pve.example:8006/api2/json" || ctx.TokenSecretEnv != "PVECTL_TOKEN" {
-		t.Fatalf("context = %#v", ctx)
+	profile := cfg.Profiles["home"]
+	if profile.Endpoint != "https://pve.example:8006/api2/json" || profile.TokenSecretEnv != "PVECTL_TOKEN" {
+		t.Fatalf("profile = %#v", profile)
 	}
-	if !ctx.InsecureSkipVerify || ctx.Timeout != "30s" || ctx.DefaultOutput != "table" {
-		t.Fatalf("context defaults = %#v", ctx)
+	if !profile.InsecureSkipVerify || profile.Timeout != "30s" || profile.DefaultOutput != "table" {
+		t.Fatalf("profile defaults = %#v", profile)
+	}
+
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	text := string(data)
+	for _, want := range []string{"current_profile: home", "profiles:"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("config yaml missing %q:\n%s", want, text)
+		}
+	}
+	for _, old := range []string{"current_context", "contexts:"} {
+		if strings.Contains(text, old) {
+			t.Fatalf("config yaml includes old key %q:\n%s", old, text)
+		}
 	}
 }
 
@@ -62,11 +79,11 @@ func TestConfigInitNoUseLeavesCurrentEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
-	if cfg.CurrentContext != "" {
-		t.Fatalf("current context = %q, want empty", cfg.CurrentContext)
+	if cfg.CurrentProfile != "" {
+		t.Fatalf("current profile = %q, want empty", cfg.CurrentProfile)
 	}
-	if _, ok := cfg.Contexts["home"]; !ok {
-		t.Fatal("expected home context")
+	if _, ok := cfg.Profiles["home"]; !ok {
+		t.Fatal("expected home profile")
 	}
 }
 
@@ -93,7 +110,7 @@ func TestConfigInitOverwriteBehavior(t *testing.T) {
 		"--token-secret-env", "PVECTL_TOKEN",
 	}
 	if err := RunWithDependencies(replacementArgs, "test", Dependencies{Stdout: &bytes.Buffer{}, Stderr: &bytes.Buffer{}}); err == nil {
-		t.Fatal("expected duplicate context error")
+		t.Fatal("expected duplicate profile error")
 	}
 
 	replacementArgs = append(replacementArgs, "--overwrite")
@@ -104,7 +121,7 @@ func TestConfigInitOverwriteBehavior(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load config: %v", err)
 	}
-	if got := cfg.Contexts["home"].Endpoint; got != "https://other.example:8006/api2/json" {
+	if got := cfg.Profiles["home"].Endpoint; got != "https://other.example:8006/api2/json" {
 		t.Fatalf("endpoint = %q", got)
 	}
 }
@@ -117,6 +134,67 @@ func TestConfigInitRequiredFlagFailure(t *testing.T) {
 	}, "test", Dependencies{Stdout: &bytes.Buffer{}, Stderr: &bytes.Buffer{}})
 	if err == nil {
 		t.Fatal("expected required flag error")
+	}
+}
+
+func TestConfigProfileCommands(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "config.yaml")
+
+	err := RunWithDependencies([]string{
+		"pvectl",
+		"--config", cfgPath,
+		"config", "set-profile", "lab",
+		"--endpoint", "https://pve-lab.example:8006/api2/json",
+		"--token-id", "root@pam!test",
+		"--token-secret-env", "PVECTL_TOKEN",
+	}, "test", Dependencies{Stdout: &bytes.Buffer{}, Stderr: &bytes.Buffer{}})
+	if err != nil {
+		t.Fatalf("set profile: %v", err)
+	}
+
+	err = RunWithDependencies([]string{
+		"pvectl",
+		"--config", cfgPath,
+		"config", "use-profile", "lab",
+	}, "test", Dependencies{Stdout: &bytes.Buffer{}, Stderr: &bytes.Buffer{}})
+	if err != nil {
+		t.Fatalf("use profile: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	err = RunWithDependencies([]string{
+		"pvectl",
+		"--config", cfgPath,
+		"config", "current-profile",
+	}, "test", Dependencies{Stdout: &stdout, Stderr: &bytes.Buffer{}})
+	if err != nil {
+		t.Fatalf("current profile: %v", err)
+	}
+	if got, want := stdout.String(), "lab\n"; got != want {
+		t.Fatalf("current profile = %q, want %q", got, want)
+	}
+}
+
+func TestOldContextNamesAreRejected(t *testing.T) {
+	if err := RunWithDependencies([]string{"pvectl", "--context", "home", "version"}, "test", Dependencies{
+		Stdout: &bytes.Buffer{},
+		Stderr: &bytes.Buffer{},
+	}); err == nil {
+		t.Fatal("expected old --context flag to be rejected")
+	}
+
+	for _, command := range []string{"set-context", "use-context", "current-context"} {
+		err := RunWithDependencies([]string{
+			"pvectl",
+			"--config", filepath.Join(t.TempDir(), "config.yaml"),
+			"config", command, "home",
+		}, "test", Dependencies{Stdout: &bytes.Buffer{}, Stderr: &bytes.Buffer{}})
+		if err == nil {
+			t.Fatalf("expected old %s command to be rejected", command)
+		}
+		if !strings.Contains(err.Error(), "was removed") {
+			t.Fatalf("old %s error = %v", command, err)
+		}
 	}
 }
 

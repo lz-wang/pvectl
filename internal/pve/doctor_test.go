@@ -27,7 +27,7 @@ func TestDoctorMissingConfigFile(t *testing.T) {
 
 func TestDoctorInvalidYAML(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	if err := os.WriteFile(path, []byte("contexts: ["), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("profiles: ["), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 
@@ -39,61 +39,61 @@ func TestDoctorInvalidYAML(t *testing.T) {
 	}
 }
 
-func TestDoctorMissingCurrentContext(t *testing.T) {
+func TestDoctorMissingCurrentProfile(t *testing.T) {
 	path := writeDoctorConfig(t, &config.Config{
-		Contexts: map[string]config.Context{"home": validDoctorContext()},
+		Profiles: map[string]config.Profile{"home": validDoctorProfile()},
 	})
 
 	result := NewDoctorService(nil).Run(context.Background(), DoctorOptions{ConfigPath: path, Offline: true})
 
-	requireDoctorRow(t, result, "CURRENT_CONTEXT", output.DoctorStatusFail)
-	requireDoctorRow(t, result, "CONTEXT_FIELDS", output.DoctorStatusSkip)
+	requireDoctorRow(t, result, "CURRENT_PROFILE", output.DoctorStatusFail)
+	requireDoctorRow(t, result, "PROFILE_FIELDS", output.DoctorStatusSkip)
 }
 
-func TestDoctorContextNotFound(t *testing.T) {
+func TestDoctorProfileNotFound(t *testing.T) {
 	path := writeDoctorConfig(t, &config.Config{
-		CurrentContext: "missing",
-		Contexts:       map[string]config.Context{"home": validDoctorContext()},
+		CurrentProfile: "missing",
+		Profiles:       map[string]config.Profile{"home": validDoctorProfile()},
 	})
 
 	result := NewDoctorService(nil).Run(context.Background(), DoctorOptions{ConfigPath: path, Offline: true})
 
-	row := requireDoctorRow(t, result, "CURRENT_CONTEXT", output.DoctorStatusFail)
-	if !strings.Contains(row.Message, `context "missing" not found`) {
-		t.Fatalf("context message = %q", row.Message)
+	row := requireDoctorRow(t, result, "CURRENT_PROFILE", output.DoctorStatusFail)
+	if !strings.Contains(row.Message, `profile "missing" not found`) {
+		t.Fatalf("profile message = %q", row.Message)
 	}
 }
 
 func TestDoctorMissingEndpoint(t *testing.T) {
 	t.Setenv("PVECTL_DOCTOR_TOKEN", "secret")
-	ctxCfg := validDoctorContext()
-	ctxCfg.Endpoint = ""
-	path := writeDoctorContext(t, ctxCfg)
+	profile := validDoctorProfile()
+	profile.Endpoint = ""
+	path := writeDoctorProfile(t, profile)
 
 	result := NewDoctorService(nil).Run(context.Background(), DoctorOptions{ConfigPath: path, Offline: true})
 
-	row := requireDoctorRow(t, result, "CONTEXT_FIELDS", output.DoctorStatusFail)
+	row := requireDoctorRow(t, result, "PROFILE_FIELDS", output.DoctorStatusFail)
 	if !strings.Contains(row.Message, "endpoint") {
-		t.Fatalf("context fields message = %q", row.Message)
+		t.Fatalf("profile fields message = %q", row.Message)
 	}
 	requireDoctorRow(t, result, "ENDPOINT", output.DoctorStatusFail)
 }
 
 func TestDoctorMissingTokenEnv(t *testing.T) {
-	ctxCfg := validDoctorContext()
-	ctxCfg.TokenSecretEnv = ""
-	path := writeDoctorContext(t, ctxCfg)
+	profile := validDoctorProfile()
+	profile.TokenSecretEnv = ""
+	path := writeDoctorProfile(t, profile)
 
 	result := NewDoctorService(nil).Run(context.Background(), DoctorOptions{ConfigPath: path, Offline: true})
 
-	requireDoctorRow(t, result, "CONTEXT_FIELDS", output.DoctorStatusFail)
+	requireDoctorRow(t, result, "PROFILE_FIELDS", output.DoctorStatusFail)
 	requireDoctorRow(t, result, "TOKEN_SECRET_ENV", output.DoctorStatusFail)
 }
 
 func TestDoctorTokenEnvEmpty(t *testing.T) {
-	ctxCfg := validDoctorContext()
-	ctxCfg.TokenSecretEnv = "PVECTL_DOCTOR_EMPTY_TOKEN"
-	path := writeDoctorContext(t, ctxCfg)
+	profile := validDoctorProfile()
+	profile.TokenSecretEnv = "PVECTL_DOCTOR_EMPTY_TOKEN"
+	path := writeDoctorProfile(t, profile)
 
 	result := NewDoctorService(nil).Run(context.Background(), DoctorOptions{ConfigPath: path, Offline: true})
 
@@ -105,9 +105,9 @@ func TestDoctorTokenEnvEmpty(t *testing.T) {
 
 func TestDoctorInvalidTimeout(t *testing.T) {
 	t.Setenv("PVECTL_DOCTOR_TOKEN", "secret")
-	ctxCfg := validDoctorContext()
-	ctxCfg.Timeout = "soon"
-	path := writeDoctorContext(t, ctxCfg)
+	profile := validDoctorProfile()
+	profile.Timeout = "soon"
+	path := writeDoctorProfile(t, profile)
 
 	result := NewDoctorService(nil).Run(context.Background(), DoctorOptions{ConfigPath: path, Offline: true})
 
@@ -116,9 +116,9 @@ func TestDoctorInvalidTimeout(t *testing.T) {
 
 func TestDoctorInvalidOutput(t *testing.T) {
 	t.Setenv("PVECTL_DOCTOR_TOKEN", "secret")
-	ctxCfg := validDoctorContext()
-	ctxCfg.DefaultOutput = "xml"
-	path := writeDoctorContext(t, ctxCfg)
+	profile := validDoctorProfile()
+	profile.DefaultOutput = "xml"
+	path := writeDoctorProfile(t, profile)
 
 	result := NewDoctorService(nil).Run(context.Background(), DoctorOptions{ConfigPath: path, Offline: true})
 
@@ -130,9 +130,9 @@ func TestDoctorInvalidOutput(t *testing.T) {
 
 func TestDoctorInvalidEndpointURL(t *testing.T) {
 	t.Setenv("PVECTL_DOCTOR_TOKEN", "secret")
-	ctxCfg := validDoctorContext()
-	ctxCfg.Endpoint = "ftp://pve.lan/api2/json"
-	path := writeDoctorContext(t, ctxCfg)
+	profile := validDoctorProfile()
+	profile.Endpoint = "ftp://pve.lan/api2/json"
+	path := writeDoctorProfile(t, profile)
 
 	result := NewDoctorService(nil).Run(context.Background(), DoctorOptions{ConfigPath: path, Offline: true})
 
@@ -141,9 +141,9 @@ func TestDoctorInvalidEndpointURL(t *testing.T) {
 
 func TestDoctorOfflineSkipsAPI(t *testing.T) {
 	t.Setenv("PVECTL_DOCTOR_TOKEN", "secret")
-	path := writeDoctorContext(t, validDoctorContext())
+	path := writeDoctorProfile(t, validDoctorProfile())
 	called := false
-	service := NewDoctorService(func(config.Context, ClientOptions) (Backend, error) {
+	service := NewDoctorService(func(config.Profile, ClientOptions) (Backend, error) {
 		called = true
 		return doctorBackend{}, nil
 	})
@@ -162,7 +162,7 @@ func TestDoctorOfflineSkipsAPI(t *testing.T) {
 
 func TestDoctorOnlineNodesOK(t *testing.T) {
 	t.Setenv("PVECTL_DOCTOR_TOKEN", "secret")
-	path := writeDoctorContext(t, validDoctorContext())
+	path := writeDoctorProfile(t, validDoctorProfile())
 	service := NewDoctorService(doctorFactory(doctorBackend{
 		nodes: []output.NodeRow{{Name: "pve1"}, {Name: "pve2"}},
 	}, nil))
@@ -181,7 +181,7 @@ func TestDoctorOnlineNodesOK(t *testing.T) {
 
 func TestDoctorOnlineNodesFail(t *testing.T) {
 	t.Setenv("PVECTL_DOCTOR_TOKEN", "secret")
-	path := writeDoctorContext(t, validDoctorContext())
+	path := writeDoctorProfile(t, validDoctorProfile())
 	service := NewDoctorService(doctorFactory(doctorBackend{
 		nodesErr: errors.New("permission denied"),
 	}, nil))
@@ -197,7 +197,7 @@ func TestDoctorOnlineNodesFail(t *testing.T) {
 
 func TestDoctorNodeExists(t *testing.T) {
 	t.Setenv("PVECTL_DOCTOR_TOKEN", "secret")
-	path := writeDoctorContext(t, validDoctorContext())
+	path := writeDoctorProfile(t, validDoctorProfile())
 	service := NewDoctorService(doctorFactory(doctorBackend{
 		nodes: []output.NodeRow{{Name: "pve1"}},
 	}, nil))
@@ -209,7 +209,7 @@ func TestDoctorNodeExists(t *testing.T) {
 
 func TestDoctorNodeMissing(t *testing.T) {
 	t.Setenv("PVECTL_DOCTOR_TOKEN", "secret")
-	path := writeDoctorContext(t, validDoctorContext())
+	path := writeDoctorProfile(t, validDoctorProfile())
 	service := NewDoctorService(doctorFactory(doctorBackend{
 		nodes: []output.NodeRow{{Name: "pve1"}},
 	}, nil))
@@ -236,11 +236,11 @@ func requireDoctorRow(t *testing.T, result DoctorResult, check string, status ou
 	return output.DoctorRow{}
 }
 
-func writeDoctorContext(t *testing.T, ctxCfg config.Context) string {
+func writeDoctorProfile(t *testing.T, profile config.Profile) string {
 	t.Helper()
 	return writeDoctorConfig(t, &config.Config{
-		CurrentContext: "home",
-		Contexts:       map[string]config.Context{"home": ctxCfg},
+		CurrentProfile: "home",
+		Profiles:       map[string]config.Profile{"home": profile},
 	})
 }
 
@@ -253,8 +253,8 @@ func writeDoctorConfig(t *testing.T, cfg *config.Config) string {
 	return path
 }
 
-func validDoctorContext() config.Context {
-	return config.Context{
+func validDoctorProfile() config.Profile {
+	return config.Profile{
 		Endpoint:       "https://pve.lan:8006/api2/json",
 		TokenID:        "automation@pve!pvectl",
 		TokenSecretEnv: "PVECTL_DOCTOR_TOKEN",
@@ -263,8 +263,8 @@ func validDoctorContext() config.Context {
 	}
 }
 
-func doctorFactory(backend Backend, err error) func(config.Context, ClientOptions) (Backend, error) {
-	return func(config.Context, ClientOptions) (Backend, error) {
+func doctorFactory(backend Backend, err error) func(config.Profile, ClientOptions) (Backend, error) {
+	return func(config.Profile, ClientOptions) (Backend, error) {
 		return backend, err
 	}
 }

@@ -7,10 +7,18 @@ import (
 	"github.com/lz-wang/pvectl/cmd"
 )
 
-var version = "dev"
+var (
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
+)
 
 func main() {
-	if err := cmd.Run(os.Args, version); err != nil {
+	if err := cmd.RunWithBuildInfo(os.Args, cmd.BuildInfo{
+		Version: version,
+		Commit:  commit,
+		Date:    date,
+	}); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
