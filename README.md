@@ -9,6 +9,14 @@ commands for a personal Proxmox cluster, not a full management platform.
 
 ## Install
 
+With Homebrew:
+
+```bash
+brew install lz-wang/tap/pvectl
+```
+
+From source:
+
 ```bash
 make build
 ```
@@ -94,6 +102,18 @@ for clone, config, resize, migrate, snapshot, delete, output formats, and
 scripting details. See [docs/output-schema.md](docs/output-schema.md) and
 [docs/compatibility.md](docs/compatibility.md) for the structured output and
 compatibility contracts.
+
+## Homebrew Release
+
+Tag releases publish GitHub Release assets and then update
+`lz-wang/homebrew-tap`. Configure the `HOMEBREW_TAP_TOKEN` repository secret in
+`lz-wang/pvectl` with permission to push to the tap repository.
+
+To regenerate the Formula locally for an existing release:
+
+```bash
+scripts/update-homebrew-formula.sh v1.0.0 /Users/lzwang/projects/homebrew-tap
+```
 
 ## Non-goals
 

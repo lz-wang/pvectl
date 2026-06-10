@@ -220,9 +220,48 @@ jobs:
           fi
           gh release upload "$TAG" release-assets/* --clobber
 
+  publish_homebrew:
+    runs-on: ubuntu-latest
+    needs: [test, publish]
+    if: ${{ needs.test.outputs.is_release == 'true' }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.test.outputs.checkout_ref }}
+
+      - name: Clone Homebrew tap
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "$HOMEBREW_TAP_TOKEN" ]; then
+            echo "HOMEBREW_TAP_TOKEN secret is required to update lz-wang/homebrew-tap" >&2
+            exit 1
+          fi
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/lz-wang/homebrew-tap.git" homebrew-tap
+
+      - name: Update pvectl formula
+        env:
+          TAG: ${{ needs.test.outputs.release_tag }}
+        run: scripts/update-homebrew-formula.sh "$TAG" homebrew-tap
+
+      - name: Commit and push formula
+        working-directory: homebrew-tap
+        env:
+          TAG: ${{ needs.test.outputs.release_tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/pvectl.rb
+          if git diff --cached --quiet; then
+            echo "Formula/pvectl.rb is already up to date for ${TAG}."
+            exit 0
+          fi
+          git commit -m "Update pvectl to ${TAG}"
+          git push
+
   notify:
     runs-on: ubuntu-latest
-    needs: [test, build, publish]
+    needs: [test, build, publish, publish_homebrew]
     if: ${{ always() && needs.test.outputs.skip_run != 'true' }}
     steps:
       - name: Notify via Pushover
@@ -235,6 +274,7 @@ jobs:
           <u>测试结果</u>: ${{ needs.test.result == 'success' && '<font color="#00aa00"><b>success</b></font>' || format('<font color="#cc0000"><b>{0}</b></font>', needs.test.result) }}
           <u>构建结果</u>: ${{ needs.build.result == 'success' && '<font color="#00aa00"><b>success</b></font>' || format('<font color="#cc0000"><b>{0}</b></font>', needs.build.result) }}
           <u>发布结果</u>: ${{ needs.publish.result == 'success' && '<font color="#00aa00"><b>success</b></font>' || format('<font color="#666666"><b>{0}</b></font>', needs.publish.result) }}
+          <u>Homebrew结果</u>: ${{ needs.publish_homebrew.result == 'success' && '<font color="#00aa00"><b>success</b></font>' || format('<font color="#666666"><b>{0}</b></font>', needs.publish_homebrew.result) }}
           <u>版本</u>: <font color="#0000ff">${{ needs.test.outputs.version || github.ref_name || inputs.tag }}</font>
           <u>触发人</u>: <i>${{ github.actor }}</i>
           ${{ needs.test.outputs.release_url && format('<a href="{0}">查看 Release</a>', needs.test.outputs.release_url) || '' }}
